@@ -47,9 +47,13 @@ generateLargeNetwork = True	#required #CHECKTHIS: autoencoder does not require b
 largeBatchSize = False	#not supported	#else train each layer using entire training set
 generateNetworkStatic = False	#optional
 generateDeepNetwork = True	#optional	#used for algorithm testing
+shareComputationalUnits = False
 if(generateDeepNetwork):
 	generateNetworkStatic = True	#True: autoencoder requires significant number of neurons to retain performance?
-
+if(generateNetworkStatic):
+	shareComputationalUnits = True #prototype implementation for sharing computational units (neurons/subnets) in tensorflow (not required for smallDataset)	#shareComputationalUnits are only possible because weights do not change	#reduces GPU RAM required to forward propagate large untrained net, but increases computational time (indexing of shared computational units)	#currently requires generateNetworkStatic (as each shared computational unit must have same number of inputs)
+	#note shareComputationalUnits:supportSkipLayers is supported, but will have to have enough GPU RAM to support Atrace/Ztrace for every unitxbatchSize in network
+	
 #learning algorithm customisation;
 generateVeryLargeNetwork = False
 if(learningAlgorithmLIANN):
@@ -81,7 +85,6 @@ if(supportDimensionalityReduction):
 #network/activation parameters;
 #forward excitatory connections;
 Wf = {}
-Wb = {}
 B = {}
 if(supportMultipleNetworks):
 	WallNetworksFinalLayer = None
@@ -89,7 +92,16 @@ if(supportMultipleNetworks):
 if(supportSkipLayers):
 	Ztrace = {}
 	Atrace = {}
+if(shareComputationalUnits):
+	#shared computational units are only currently used for connections between static sized layers (ie not input and output layers):
+	numberOfSharedComputationalUnitsNeurons = 1000	#number of unique shared computational units/neurons (this should be less than the total number of units in the network static sized layers)
+	WfSharedComputationalUnitsNeurons = None
+	WfIndex = {}
+	BSharedComputationalUnitsNeurons = None
+	BIndex = {}
+	#WfSharedComputationalUnitsSubnets	#not currently implemented
 	
+
 #Network parameters
 n_h = []
 numberOfLayers = 0
@@ -152,23 +164,65 @@ def defineNeuralNetworkParameters():
 	print("numberOfNetworks", numberOfNetworks)
 	
 	global randomNormal
+	global shareComputationalUnits
+	if(shareComputationalUnits):
+		global WfSharedComputationalUnitsNeurons
+		global BSharedComputationalUnitsNeurons
 	randomNormal = tf.initializers.RandomNormal()
+	
+	if(shareComputationalUnits):
+		randomUniformIndex = tf.initializers.RandomUniform(minval=0.0, maxval=1.0)	#not available:  minval=0, maxval=numberOfSharedComputationalUnitsNeurons, dtype=tf.dtypes.int32; 
+		shareComputationalUnitsChecks = False
+		if(numberOfLayers >= 3):
+			#shareComputationalUnits must have at least 2 hidden layers
+			if(n_h[1] == n_h[2]):
+				#current shareComputationalUnits implementation requires enough GPU Ram to create and store a large numberOfSharedComputationalUnitsNeurons x staticHiddenLayerNumberNeurons weight array
+				WfSharedComputationalUnitsNeurons = randomNormal([numberOfSharedComputationalUnitsNeurons, n_h[1]])	#for every sharedComputationalUnit, number of neurons on a prior layer
+				BSharedComputationalUnitsNeurons = tf.zeros(numberOfSharedComputationalUnitsNeurons)
+			else:
+				shareComputationalUnits = False
+				print("shareComputationalUnits must have at least 2 static sized hidden layers")
+				exit()
+		else:
+			shareComputationalUnits = False
+			print("shareComputationalUnits must have at least 2 hidden layers")
+			exit()
 	
 	for networkIndex in range(1, numberOfNetworks+1):
 		for l1 in range(1, numberOfLayers+1):
 			#forward excitatory connections;
-			if(supportSkipLayers):
-				for l2 in range(0, l1):
-					if(l2 < l1):
-						WlayerF = randomNormal([n_h[l2], n_h[l1]]) 
-						Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = tf.Variable(WlayerF)
+			
+			useUniqueLayerWeights = True
+			if(shareComputationalUnits):
+				if((l1 > 1) and (l1 < numberOfLayers)):
+					#shared computational units are only currently used for connections between static sized layers (ie not input and output layers)
+					useUniqueLayerWeights = False
+			
+			if(useUniqueLayerWeights):
+				if(supportSkipLayers):
+					for l2 in range(0, l1):
+						if(l2 < l1):
+							WlayerF = randomNormal([n_h[l2], n_h[l1]]) 
+							Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = tf.Variable(WlayerF)
+				else:
+					WlayerF = randomNormal([n_h[l1-1], n_h[l1]]) 
+					Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")] = tf.Variable(WlayerF)
+				Blayer = tf.zeros(n_h[l1])
+				B[generateParameterNameNetwork(networkIndex, l1, "B")] = tf.Variable(Blayer)
 			else:
-				WlayerF = randomNormal([n_h[l1-1], n_h[l1]]) 
-				Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")] = tf.Variable(WlayerF)
-				
-			Blayer = tf.zeros(n_h[l1])
-			B[generateParameterNameNetwork(networkIndex, l1, "B")] = tf.Variable(Blayer)
-
+				if(supportSkipLayers):
+					for l2 in range(1, l1):	#shareComputationalUnits does not currently support skip layer connections to input layer (which has different layer size)
+						if(l2 < l1):
+							WlayerFIndex = tf.cast(randomUniformIndex([n_h[l1]])*numberOfSharedComputationalUnitsNeurons, tf.int32)
+							#print("WlayerFIndex = ", WlayerFIndex)
+							WfIndex[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "WfIndex")] = tf.Variable(WlayerFIndex)
+				else:
+					WlayerFIndex = tf.cast(randomUniformIndex([n_h[l1]])*numberOfSharedComputationalUnitsNeurons, tf.int32)
+					#print("WlayerFIndex = ", WlayerFIndex)
+					WfIndex[generateParameterNameNetwork(networkIndex, l1, "WfIndex")] = WlayerFIndex
+				BlayerIndex = tf.cast(randomUniformIndex([n_h[l1]])*numberOfSharedComputationalUnitsNeurons, tf.int32)
+				BIndex[generateParameterNameNetwork(networkIndex, l1, "BIndex")] = tf.Variable(BlayerIndex)		
+			
 			if(supportSkipLayers):
 				Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 				Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
@@ -221,7 +275,7 @@ def neuralNetworkPropagationLUANN(x, layer=None, networkIndex=1, dimensionalityR
 		if(dimensionalityReduction):
 			if(l1 < maxLayer): #ignore last layer
 				#print("dimensionalityReduction")
-				ANNtf2_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=Wb, Wbname="Wb", updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
+				ANNtf2_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
 		
 		AprevLayer = A	#CHECKTHIS: note uses A value prior to weight updates
 		if(supportSkipLayers):
@@ -236,15 +290,45 @@ def neuralNetworkPropagationLUANN(x, layer=None, networkIndex=1, dimensionalityR
 	return pred
 
 def neuralNetworkPropagationLayerForward(l1, AprevLayer, networkIndex=1):
-	
-	if(supportSkipLayers):
-		Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
-		for l2 in range(0, l1):
-			WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
-			Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")]))	
-	else:	
-		WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
-		Z = tf.add(tf.matmul(AprevLayer, WlayerF), B[generateParameterNameNetwork(networkIndex, l1, "B")])
+
+	useUniqueLayerWeights = True
+	if(shareComputationalUnits):
+		if((l1 > 1) and (l1 < numberOfLayers)):
+			#shared computational units are only currently used for connections between static sized layers (ie not input and output layers)
+			useUniqueLayerWeights = False
+					
+	if(useUniqueLayerWeights):	
+		Blayer = B[generateParameterNameNetwork(networkIndex, l1, "B")]
+		if(supportSkipLayers):
+			Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
+			for l2 in range(0, l1):
+				WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
+				Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), Blayer))	
+		else:	
+			WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
+			Z = tf.add(tf.matmul(AprevLayer, WlayerF), Blayer)
+	else:
+		#dynamically generate layer biases;
+		BlayerIndex = BIndex[generateParameterNameNetwork(networkIndex, l1, "BIndex")]
+		#Blayer = BSharedComputationalUnitsNeurons[BlayerIndex]
+		Blayer = tf.gather(BSharedComputationalUnitsNeurons, BlayerIndex)
+		#print("Blayer = ", Blayer)	
+		if(supportSkipLayers):
+			Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
+			for l2 in range(1, l1):	#shareComputationalUnits does not currently support skip layer connections to input layer (which has different layer size)
+				if(l2 < l1):
+					#dynamically generate layer weights;
+					WlayerFIndex = WfIndex[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "WfIndex")]
+					#WlayerF = WfSharedComputationalUnitsNeurons[WlayerFIndex]
+					WlayerF = tf.gather(WfSharedComputationalUnitsNeurons, WlayerFIndex)
+					Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), Blayer))	
+		else:
+			#dynamically generate layer weights;
+			WlayerFIndex = WfIndex[generateParameterNameNetwork(networkIndex, l1, "WfIndex")]
+			#WlayerF = WfSharedComputationalUnitsNeurons[WlayerFIndex]
+			WlayerF = tf.gather(WfSharedComputationalUnitsNeurons, WlayerFIndex)
+			Z = tf.add(tf.matmul(AprevLayer, WlayerF), Blayer)
+			
 	A = activationFunction(Z)
 	
 	return A, Z
