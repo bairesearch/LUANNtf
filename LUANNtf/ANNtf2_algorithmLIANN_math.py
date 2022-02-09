@@ -210,6 +210,9 @@ def neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNorm
 	#generate masks (based on highly correlated k/neurons);
 	#print("kMaxCorrelation = ", kMaxCorrelation)
 	kPassArray = tf.less(kMaxCorrelation, maxCorrelation)
+	randomiseLayerNeurons(networkIndex, n_h, l1, kPassArray, randomNormal, Wf, Wfname, Wb, Wbname, updateAutoencoderBackwardsWeights, supportSkipLayers, supportDimensionalityReductionRandomise)
+
+def randomiseLayerNeurons(networkIndex, n_h, l1, kPassArray, randomNormal, Wf, Wfname="W", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=False, supportDimensionalityReductionRandomise=True):
 	kFailArray = tf.logical_not(kPassArray)
 	#print("kPassArray = ", kPassArray)
 	#print("kFailArray = ", kFailArray)
@@ -259,7 +262,6 @@ def applyMaskToWeights(Wlayer, WlayerRand, kPassArray, kFailArray):
 	return Wlayer
 
 
-	
 def calculateOffDiagonalCorrelationMatrix(A, nanReplacementValue=1.0, getOffDiagonalCorrelationMatrix=True):
 	Anumpy = A.numpy()
 	correlationMatrixX = np.transpose(Anumpy)	#2-D array containing multiple variables and observations. Each row of x represents a variable, and each column a single observation of all those variables. Also see rowvar below.	#https://numpy.org/doc/stable/reference/generated/numpy.corrcoef.html
@@ -281,4 +283,12 @@ def calculateOffDiagonalCorrelationMatrix(A, nanReplacementValue=1.0, getOffDiag
 		return correlationMatrixOffDiagonal
 	else:
 		return correlationsOffDiagonal
+	
+def neuronActivationRegularisation(networkIndex, n_h, l1, A, randomNormal, Wf, Wfname="W", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=False, supportDimensionalityReductionRandomise=True, supportDimensionalityReductionRegulariseActivityMinAvg=0.1, supportDimensionalityReductionRegulariseActivityMaxAvg=0.9):
+	#CHECKTHIS: treat any level/intensity of activation the same
+	Aactive = tf.cast(A, tf.bool)
+	AactiveFloat = tf.cast(Aactive, tf.float32)
+	neuronActivationFrequency = tf.reduce_mean(AactiveFloat, axis=0)
+	kPassArray = tf.logical_and(tf.greater(neuronActivationFrequency, supportDimensionalityReductionRegulariseActivityMinAvg), tf.less(neuronActivationFrequency, supportDimensionalityReductionRegulariseActivityMaxAvg))
+	randomiseLayerNeurons(networkIndex, n_h, l1, kPassArray, randomNormal, Wf, Wfname, Wb, Wbname, updateAutoencoderBackwardsWeights, supportSkipLayers, supportDimensionalityReductionRandomise)
 	

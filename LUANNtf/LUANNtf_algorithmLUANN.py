@@ -33,8 +33,8 @@ debugSingleLayerOnly = False
 debugFastTrain = False	#not supported
 
 #select learningAlgorithm:
-learningAlgorithmLIANN = False	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
-learningAlgorithmNone = True	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
+learningAlgorithmLIANN = True	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
+learningAlgorithmNone = False	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
 
 #intialise network properties (configurable);	
 supportSkipLayers = False #fully connected skip layer network
@@ -51,8 +51,9 @@ shareComputationalUnits = False
 if(generateDeepNetwork):
 	generateNetworkStatic = True	#True: autoencoder requires significant number of neurons to retain performance?
 if(generateNetworkStatic):
-	shareComputationalUnits = True #prototype implementation for sharing computational units (neurons/subnets) in tensorflow (not required for smallDataset)	#shareComputationalUnits are only possible because weights do not change	#reduces GPU RAM required to forward propagate large untrained net, but increases computational time (indexing of shared computational units)	#currently requires generateNetworkStatic (as each shared computational unit must have same number of inputs)
-	#note shareComputationalUnits:supportSkipLayers is supported, but will have to have enough GPU RAM to support Atrace/Ztrace for every unitxbatchSize in network
+	if(learningAlgorithmNone):	#only currently supported by learningAlgorithmNone
+		shareComputationalUnits = True #prototype implementation for sharing computational units (neurons/subnets) in tensorflow (not required for smallDataset)	#shareComputationalUnits are only possible because weights do not change	#reduces GPU RAM required to forward propagate large untrained net, but increases computational time (indexing of shared computational units)	#currently requires generateNetworkStatic (as each shared computational unit must have same number of inputs)
+		#note shareComputationalUnits:supportSkipLayers is supported, but will have to have enough GPU RAM to support Atrace/Ztrace for every unitxbatchSize in network
 	
 #learning algorithm customisation;
 generateVeryLargeNetwork = False
@@ -77,11 +78,19 @@ supportDimensionalityReductionLimitFrequency = False
 if(supportDimensionalityReduction):
 	supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
 	maxCorrelation = 0.95	#requires tuning
-	supportDimensionalityReductionLimitFrequency = True
-	if(supportDimensionalityReductionLimitFrequency):
-		supportDimensionalityReductionLimitFrequencyStep = 1000
-
-
+	supportDimensionalityReductionRegulariseActivity = True	#reset neurons that are rarely used/fire (or are used/fire too often) across batches - indicates they do not contain useful information
+	if(supportDimensionalityReductionRegulariseActivity):
+		supportDimensionalityReductionRegulariseActivityMinAvg = 0.1
+		supportDimensionalityReductionRegulariseActivityMaxAvg = 0.9
+	supportDimensionalityReductionFirstPhaseOnly = True	#perform LIANN in first phase only (x epochs of training), then apply hebbian learning at final layer
+	if(supportDimensionalityReductionFirstPhaseOnly):
+		supportDimensionalityReductionLimitFrequency = False
+		supportDimensionalityReductionFirstPhaseOnlyNumEpochs = 1
+	else:
+		supportDimensionalityReductionLimitFrequency = True
+		if(supportDimensionalityReductionLimitFrequency):
+			supportDimensionalityReductionLimitFrequencyStep = 1000
+			
 #network/activation parameters;
 #forward excitatory connections;
 Wf = {}
@@ -276,7 +285,9 @@ def neuralNetworkPropagationLUANN(x, layer=None, networkIndex=1, dimensionalityR
 			if(l1 < maxLayer): #ignore last layer
 				#print("dimensionalityReduction")
 				ANNtf2_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
-		
+				if(supportDimensionalityReductionRegulariseActivity):
+					ANNtf2_algorithmLIANN_math.neuronActivationRegularisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, supportDimensionalityReductionRegulariseActivityMinAvg=supportDimensionalityReductionRegulariseActivityMinAvg, supportDimensionalityReductionRegulariseActivityMaxAvg=supportDimensionalityReductionRegulariseActivityMaxAvg)
+					
 		AprevLayer = A	#CHECKTHIS: note uses A value prior to weight updates
 		if(supportSkipLayers):
 			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z

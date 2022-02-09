@@ -126,14 +126,24 @@ def neuralNetworkPropagationLayer(x, networkIndex, l):
 def neuralNetworkPropagationAllNetworksFinalLayer(x):
 	return LUANNtf_algorithm.neuralNetworkPropagationAllNetworksFinalLayer(x)
 	
-def trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display):
+def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display):
 	
+	executeFinalLayerHebbianLearning = True
+	if(LUANNtf_algorithm.supportDimensionalityReduction):
+		if(LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnly):
+			if(e < LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnlyNumEpochs):
+				executeFinalLayerHebbianLearning = False
+
 	#print("trainMultipleFiles error: does not support greedy training for LUANN")
-	loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex)
+	if(executeFinalLayerHebbianLearning):
+		loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex)
 	
 	if(LUANNtf_algorithm.supportDimensionalityReduction):
 		executeLIANN = False
-		if(LUANNtf_algorithm.supportDimensionalityReductionLimitFrequency):
+		if(LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnly):
+			if(e < LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnlyNumEpochs):
+				executeLIANN = True			
+		elif(LUANNtf_algorithm.supportDimensionalityReductionLimitFrequency):
 			if(batchIndex % LUANNtf_algorithm.supportDimensionalityReductionLimitFrequencyStep == 0):
 				executeLIANN = True
 		else:
@@ -396,7 +406,7 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 						#if(l == maxLayer):	#only print accuracy after training final layer
 						if(batchIndex % displayStep == 0):
 							display = True	
-						trainBatch(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display)
+						trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display)
 						
 					#trainMultipleNetworks code;
 					if(l == maxLayer):
