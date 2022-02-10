@@ -78,10 +78,10 @@ supportDimensionalityReductionLimitFrequency = False
 if(supportDimensionalityReduction):
 	supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
 	maxCorrelation = 0.95	#requires tuning
-	supportDimensionalityReductionRegulariseActivity = True	#reset neurons that are rarely used/fire (or are used/fire too often) across batches - indicates they do not contain useful information
+	supportDimensionalityReductionRegulariseActivity = True	#reset neurons that are rarely used/fire (or are used/fire too often) across batches (batchSize >> numClasses) - indicates they do not contain useful information
 	if(supportDimensionalityReductionRegulariseActivity):
-		supportDimensionalityReductionRegulariseActivityMinAvg = 0.1
-		supportDimensionalityReductionRegulariseActivityMaxAvg = 0.9
+		supportDimensionalityReductionRegulariseActivityMinAvg = 0.01	#requires tuning
+		supportDimensionalityReductionRegulariseActivityMaxAvg = 0.99	#requires tuning
 	supportDimensionalityReductionFirstPhaseOnly = True	#perform LIANN in first phase only (x epochs of training), then apply hebbian learning at final layer
 	if(supportDimensionalityReductionFirstPhaseOnly):
 		supportDimensionalityReductionLimitFrequency = False

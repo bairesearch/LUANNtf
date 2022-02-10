@@ -256,9 +256,11 @@ def randomiseLayerNeurons(networkIndex, n_h, l1, kPassArray, randomNormal, Wf, W
 			Wb[generateParameterNameNetwork(networkIndex, l1, Wbname)] = applyMaskToWeights(Wb[generateParameterNameNetwork(networkIndex, l1, Wbname)], WlayerBrand, kPassArrayB, kFailArrayB)
 
 def applyMaskToWeights(Wlayer, WlayerRand, kPassArray, kFailArray):
-	WlayerRand = tf.multiply(WlayerRand, kFailArray)
-	Wlayer = tf.multiply(Wlayer, kPassArray)
-	Wlayer = tf.add(Wlayer, WlayerRand)
+	WlayerFail = tf.multiply(WlayerRand, kFailArray)
+	#print("WlayerFail = ", WlayerFail)
+	WlayerPass = tf.multiply(Wlayer, kPassArray)
+	#print("WlayerPass = ", WlayerPass)
+	Wlayer = tf.add(WlayerPass, WlayerFail)
 	return Wlayer
 
 
@@ -289,6 +291,8 @@ def neuronActivationRegularisation(networkIndex, n_h, l1, A, randomNormal, Wf, W
 	Aactive = tf.cast(A, tf.bool)
 	AactiveFloat = tf.cast(Aactive, tf.float32)
 	neuronActivationFrequency = tf.reduce_mean(AactiveFloat, axis=0)
+	print("neuronActivationFrequency = ", neuronActivationFrequency)
 	kPassArray = tf.logical_and(tf.greater(neuronActivationFrequency, supportDimensionalityReductionRegulariseActivityMinAvg), tf.less(neuronActivationFrequency, supportDimensionalityReductionRegulariseActivityMaxAvg))
+	print("kPassArray = ", kPassArray)
 	randomiseLayerNeurons(networkIndex, n_h, l1, kPassArray, randomNormal, Wf, Wfname, Wb, Wbname, updateAutoencoderBackwardsWeights, supportSkipLayers, supportDimensionalityReductionRandomise)
 	

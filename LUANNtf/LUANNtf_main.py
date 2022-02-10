@@ -136,6 +136,7 @@ def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers,
 
 	#print("trainMultipleFiles error: does not support greedy training for LUANN")
 	if(executeFinalLayerHebbianLearning):
+		#print("executeFinalLayerHebbianLearning")
 		loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex)
 	
 	if(LUANNtf_algorithm.supportDimensionalityReduction):
@@ -149,6 +150,7 @@ def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers,
 		else:
 			executeLIANN = True
 		if(executeLIANN):
+			#print("executeLIANN")
 			LUANNtf_algorithm.neuralNetworkPropagationLUANNdimensionalityReduction(batchX, networkIndex)	
 
 	pred = None
