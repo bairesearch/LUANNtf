@@ -151,7 +151,7 @@ def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers,
 			executeLIANN = True
 		if(executeLIANN):
 			#print("executeLIANN")
-			LUANNtf_algorithm.neuralNetworkPropagationLUANNdimensionalityReduction(batchX, networkIndex)	
+			LUANNtf_algorithm.neuralNetworkPropagationLUANNdimensionalityReduction(batchX, batchY, networkIndex)	
 
 	pred = None
 	if(display):

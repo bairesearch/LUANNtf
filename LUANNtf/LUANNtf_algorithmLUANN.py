@@ -75,14 +75,27 @@ else:
 		generateLargeNetworkRatio = 1
 
 supportDimensionalityReductionLimitFrequency = False
+supportDimensionalityReductionInhibitNeurons = False
 if(supportDimensionalityReduction):
-	supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
-	maxCorrelation = 0.95	#requires tuning
-	supportDimensionalityReductionRegulariseActivity = True	#reset neurons that are rarely used/fire (or are used/fire too often) across batches (batchSize >> numClasses) - indicates they do not contain useful information
+	
+	supportDimensionalityReductionInhibitNeurons = True	#learn to inhibit neurons in net for a given task
+	supportDimensionalityReductionMinimiseCorrelation = False #orig mode
+	supportDimensionalityReductionRegulariseActivity = False	#reset neurons that are rarely used/fire (or are used/fire too often) across batches (batchSize >> numClasses) - indicates they do not contain useful information
+	
+	if(supportDimensionalityReductionMinimiseCorrelation):
+		maxCorrelation = 0.95	#requires tuning
+		supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
+	#if(supportDimensionalityReductionInhibitNeurons):
+	
 	if(supportDimensionalityReductionRegulariseActivity):
 		supportDimensionalityReductionRegulariseActivityMinAvg = 0.01	#requires tuning
 		supportDimensionalityReductionRegulariseActivityMaxAvg = 0.99	#requires tuning
-	supportDimensionalityReductionFirstPhaseOnly = True	#perform LIANN in first phase only (x epochs of training), then apply hebbian learning at final layer
+		supportDimensionalityReductionRandomise	= True
+	
+	if(supportDimensionalityReductionInhibitNeurons):
+		supportDimensionalityReductionFirstPhaseOnly = False
+	else:
+		supportDimensionalityReductionFirstPhaseOnly = True	#perform LIANN in first phase only (x epochs of training), then apply hebbian learning at final layer
 	if(supportDimensionalityReductionFirstPhaseOnly):
 		supportDimensionalityReductionLimitFrequency = False
 		supportDimensionalityReductionFirstPhaseOnlyNumEpochs = 1
@@ -90,6 +103,7 @@ if(supportDimensionalityReduction):
 		supportDimensionalityReductionLimitFrequency = True
 		if(supportDimensionalityReductionLimitFrequency):
 			supportDimensionalityReductionLimitFrequencyStep = 1000
+
 			
 #network/activation parameters;
 #forward excitatory connections;
@@ -109,12 +123,14 @@ if(shareComputationalUnits):
 	BSharedComputationalUnitsNeurons = None
 	BIndex = {}
 	#WfSharedComputationalUnitsSubnets	#not currently implemented
-	
+if(supportDimensionalityReductionInhibitNeurons):
+  Nactive = {}  #effective bool [1.0 or 0.0]; whether neuron is active/inhibited
 
 #Network parameters
 n_h = []
 numberOfLayers = 0
 numberOfNetworks = 0
+datasetNumClasses = 0
 
 batchSize = 0
 
@@ -153,7 +169,8 @@ def defineNetworkParameters(num_input_neurons, num_output_neurons, datasetNumFea
 	global n_h
 	global numberOfLayers
 	global numberOfNetworks
-		
+	global datasetNumClasses
+
 	firstHiddenLayerNumberNeurons = num_input_neurons*generateLargeNetworkRatio
 	if(debugSingleLayerOnly):
 		numberOfLayers = 1
@@ -173,14 +190,15 @@ def defineNeuralNetworkParameters():
 	print("numberOfNetworks", numberOfNetworks)
 	
 	global randomNormal
+	global randomUniformIndex
 	global shareComputationalUnits
 	if(shareComputationalUnits):
 		global WfSharedComputationalUnitsNeurons
 		global BSharedComputationalUnitsNeurons
 	randomNormal = tf.initializers.RandomNormal()
-	
+	randomUniformIndex = tf.initializers.RandomUniform(minval=0.0, maxval=1.0)	#not available:	minval=0, maxval=numberOfSharedComputationalUnitsNeurons, dtype=tf.dtypes.int32; 
+
 	if(shareComputationalUnits):
-		randomUniformIndex = tf.initializers.RandomUniform(minval=0.0, maxval=1.0)	#not available:  minval=0, maxval=numberOfSharedComputationalUnitsNeurons, dtype=tf.dtypes.int32; 
 		shareComputationalUnitsChecks = False
 		if(numberOfLayers >= 3):
 			#shareComputationalUnits must have at least 2 hidden layers
@@ -235,7 +253,11 @@ def defineNeuralNetworkParameters():
 			if(supportSkipLayers):
 				Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 				Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
-	
+			
+			if(supportDimensionalityReductionInhibitNeurons):
+				Nactivelayer = tf.ones(n_h[l1])
+				Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")] = tf.Variable(Nactivelayer)
+
 	if(supportMultipleNetworks):
 		if(numberOfNetworks > 1):
 			global WallNetworksFinalLayer
@@ -252,8 +274,8 @@ def neuralNetworkPropagationLUANNfinalLayer(x, networkIndex=1):
 	return neuralNetworkPropagationLUANN(x, layer=numberOfLayers, networkIndex=networkIndex)
 	
 #if(supportMultipleNetworks):
-def neuralNetworkPropagationLayer(x, networkIndex=1, l=None):
-   return neuralNetworkPropagationLUANN(x, layer=l, networkIndex=networkIndex)
+def neuralNetworkPropagationLayer(x, y=None, networkIndex=1, l=None):
+   return neuralNetworkPropagationLUANN(x, y=y, layer=l, networkIndex=networkIndex)
 def neuralNetworkPropagationAllNetworksFinalLayer(AprevLayer):
 	Z = tf.add(tf.matmul(AprevLayer, WallNetworksFinalLayer), BallNetworksFinalLayer)	
 	#Z = tf.matmul(AprevLayer, WallNetworksFinalLayer)	
@@ -261,10 +283,19 @@ def neuralNetworkPropagationAllNetworksFinalLayer(AprevLayer):
 	return pred
 
 #if(supportDimensionalityReduction):	
-def neuralNetworkPropagationLUANNdimensionalityReduction(x, networkIndex=1):
-	return neuralNetworkPropagationLUANN(x, layer=None, networkIndex=networkIndex, dimensionalityReduction=True)
+def neuralNetworkPropagationLUANNdimensionalityReduction(x, y=None, networkIndex=1):
+	return neuralNetworkPropagationLUANN(x, y=y, layer=None, networkIndex=networkIndex, dimensionalityReduction=True)
 
-def neuralNetworkPropagationLUANN(x, layer=None, networkIndex=1, dimensionalityReduction=False):
+def calculatePropagationLoss(x, y, networkIndex=1):
+	costCrossEntropyWithLogits = False
+	pred = neuralNetworkPropagation(x, networkIndex)
+	target = y
+	lossCurrent = calculateLossCrossEntropy(pred, target, datasetNumClasses, costCrossEntropyWithLogits)
+	#acc = calculateAccuracy(pred, target)	#only valid for softmax class targets
+	return lossCurrent
+
+def neuralNetworkPropagationLUANN(x, y=None, layer=None, networkIndex=1, dimensionalityReduction=False):
+	#y is only used by supportDimensionalityReductionInhibitNeurons
 
 	pred = None 
 	
@@ -276,7 +307,11 @@ def neuralNetworkPropagationLUANN(x, layer=None, networkIndex=1, dimensionalityR
 		maxLayer = numberOfLayers
 	else:
 		maxLayer = layer
-			
+	
+	if(dimensionalityReduction):
+		if(supportDimensionalityReductionInhibitNeurons):
+			lossCurrent = calculatePropagationLoss(x, y, networkIndex)
+
 	for l1 in range(1, maxLayer+1):	#ignore first layer
 		
 		A, Z = neuralNetworkPropagationLayerForward(l1, AprevLayer, networkIndex)
@@ -284,10 +319,29 @@ def neuralNetworkPropagationLUANN(x, layer=None, networkIndex=1, dimensionalityR
 		if(dimensionalityReduction):
 			if(l1 < maxLayer): #ignore last layer
 				#print("dimensionalityReduction")
-				ANNtf2_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
+				if(supportDimensionalityReductionMinimiseCorrelation):
+					ANNtf2_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
 				if(supportDimensionalityReductionRegulariseActivity):
 					ANNtf2_algorithmLIANN_math.neuronActivationRegularisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, supportDimensionalityReductionRegulariseActivityMinAvg=supportDimensionalityReductionRegulariseActivityMinAvg, supportDimensionalityReductionRegulariseActivityMaxAvg=supportDimensionalityReductionRegulariseActivityMaxAvg)
-					
+				if(supportDimensionalityReductionInhibitNeurons):
+					#randomly select a neuron k on layer to trial inhibition performance;
+					Nactivelayer = Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")]
+					NactivelayerBackup = Nactivelayer #tf.Variable(Nactivelayer)
+					layerInhibitionIndex = tf.cast(randomUniformIndex([1])*n_h[l1], tf.int32)[0].numpy()
+					print("layerInhibitionIndex = ", layerInhibitionIndex)
+					Nactivelayer = tf.Variable(modifyTensorRowColumn(Nactivelayer, True, layerInhibitionIndex, 0.0, False))	#tf.Variable added to retain formatting
+					#print("NactivelayerBackup = ", NactivelayerBackup)
+					#print("Nactivelayer = ", Nactivelayer)
+					Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")] = Nactivelayer
+					loss = calculatePropagationLoss(x, y, networkIndex)
+					#acc = calculateAccuracy(pred, target)	#only valid for softmax class targets 
+					if(loss < lossCurrent):
+						lossCurrent = loss
+						print("loss < lossCurrent")
+					else:
+						Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")] = NactivelayerBackup
+						print("loss !< lossCurrent")
+
 		AprevLayer = A	#CHECKTHIS: note uses A value prior to weight updates
 		if(supportSkipLayers):
 			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
@@ -339,7 +393,10 @@ def neuralNetworkPropagationLayerForward(l1, AprevLayer, networkIndex=1):
 			#WlayerF = WfSharedComputationalUnitsNeurons[WlayerFIndex]
 			WlayerF = tf.gather(WfSharedComputationalUnitsNeurons, WlayerFIndex)
 			Z = tf.add(tf.matmul(AprevLayer, WlayerF), Blayer)
-			
+
+	if(supportDimensionalityReductionInhibitNeurons):
+		Z = tf.multiply(Z, Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")])
+
 	A = activationFunction(Z)
 	
 	return A, Z

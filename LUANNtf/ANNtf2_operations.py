@@ -264,3 +264,38 @@ def convertSignOutputToBool(xSignOutput):
 	xSignOutput = tf.maximum(xSignOutput, 0)
 	xBool = tf.dtypes.cast(xSignOutput, dtype=tf.dtypes.bool)
 	return xBool
+
+#note if updated_value isVector, updated_value should be provided in 2D format
+def modifyTensorRowColumn(a, isRow, index, updated_value, isVector):
+	
+	if(not isRow):
+		a = tf.transpose(a)
+		if(isVector):
+			updated_value = tf.transpose(updated_value)
+	
+	if(index == 0):
+		if(isVector):
+			values = [updated_value, a[index+1:]]
+		else:
+			values = [[updated_value], a[index+1:]]
+	elif(index == a.shape[0]-1):
+		if(isVector):
+			values = [a[:index], updated_value]
+		else:
+			values = [a[:index], [updated_value]]
+	else:
+		if(isVector):
+			values = [a[:index], updated_value, a[index+1:]]
+		else:
+			values = [a[:index], [updated_value], a[index+1:]]
+	
+	#print("index = ", index)
+	#print("values = ", values)
+	#print("updated_value = ", updated_value)
+			
+	a = tf.concat(axis=0, values=values)
+			
+	if(not isRow):
+		a = tf.transpose(a)
+		
+	return a
