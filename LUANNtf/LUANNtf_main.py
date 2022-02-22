@@ -49,10 +49,13 @@ suppressGradientDoNotExistForVariablesWarnings = True
 useSmallSentenceLengths = False
 
 trainMultipleFiles = False
-trainMultipleNetworks = False	#optional
+if(LUANNtf_algorithm.supportMultipleNetworks):
+	trainMultipleNetworks = True
+else:
+	trainMultipleNetworks = False
 if(trainMultipleNetworks):
 	#numberOfNetworks = 10
-	numberOfNetworks = int(100/LUANNtf_algorithm.generateLargeNetworkRatio) #normalise the number of networks based on the network layer size
+	numberOfNetworks = LUANNtf_algorithm.numberOfNetworks
 	if(numberOfNetworks == 1):	#train at least 2 networks (required for tensorflow code execution consistency)
 		trainMultipleNetworks = False
 else:
@@ -137,7 +140,10 @@ def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers,
 	#print("trainMultipleFiles error: does not support greedy training for LUANN")
 	if(executeFinalLayerHebbianLearning):
 		#print("executeFinalLayerHebbianLearning")
-		loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex)
+		if(trainMultipleNetworks):
+			LUANNtf_algorithm.neuralNetworkPropagationLUANNallLayers(batchX, networkIndex)	#propagate without performing final layer optimisation	
+		else:
+			loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex)
 	
 	if(LUANNtf_algorithm.supportDimensionalityReduction):
 		executeLIANN = False
@@ -155,8 +161,9 @@ def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers,
 
 	pred = None
 	if(display):
-		loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex)	#display final layer loss
-		print("networkIndex: %i, batchIndex: %i, loss: %f, accuracy: %f" % (networkIndex, batchIndex, loss, acc))
+		if(not trainMultipleNetworks):
+			loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex)	#display final layer loss
+			print("networkIndex: %i, batchIndex: %i, loss: %f, accuracy: %f" % (networkIndex, batchIndex, loss, acc))
 			
 def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, networkIndex=1):
 	with tf.GradientTape() as gt:
@@ -195,7 +202,7 @@ def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, netw
 def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex=1):
 	acc = 0	#only valid for softmax class targets 
 
-	pred = LUANNtf_algorithm.neuralNetworkPropagationLUANNfinalLayer(x, networkIndex)
+	pred = LUANNtf_algorithm.neuralNetworkPropagationLUANNallLayers(x, networkIndex)
 	target = y 
 	#print("pred.shape = ", pred.shape)
 	#print("target.shape = ", target.shape)
@@ -390,7 +397,6 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 
 			#greedy code [not used by LUANN, retained for cross compatibility];
 			for l in range(1, maxLayer+1):
-				#print("l = ", l)
 				trainData = generateTFtrainDataFromNParrays(train_x, train_y, shuffleSize, batchSize)
 				trainDataList = []
 				trainDataList.append(trainData)
@@ -404,6 +410,7 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 					batchYactual = batchY
 					
 					for networkIndex in range(1, maxNetwork+1):
+						#print("networkIndex = ", networkIndex)
 						display = False
 						#if(l == maxLayer):	#only print accuracy after training final layer
 						if(batchIndex % displayStep == 0):

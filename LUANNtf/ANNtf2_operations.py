@@ -41,7 +41,10 @@ def generateParameterNameNetwork(networkIndex, l, arrayName):
 def generateParameterNameNetworkSkipLayers(networkIndex, lprior, l, arrayName):	#support skip layers
 	parameterName = "n" + str(networkIndex) + "lprior" + str(lprior) + "l" + str(l) + arrayName
 	return parameterName
-
+def generateParameterNameNetworkCurrentLayer(networkIndex, arrayName):
+	parameterName = "n" + str(networkIndex) + arrayName
+	return parameterName
+	
 #support sequential inputs:		
 #used by SANI:
 def generateParameterNameSeq(l, s, arrayName):
