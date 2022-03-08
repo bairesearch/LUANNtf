@@ -15,24 +15,26 @@ generateLargeNetworkUntrained = True
 
 if(generateLargeNetworkUntrained):
   generateNetworkUntrained = True
-  generateLargeNetworkRatio = True
-  if(generateLargeNetworkRatio):
+  largeNetworkRatio = 10
+  generateLargeNetworkExpansion = False
+  if(generateLargeNetworkExpansion):
     generateLargeNetworkRatioExponential = True
-    largeNetworkRatio = 10
 else:
   generateNetworkUntrained = False
   generateLargeNetworkRatio = False
 
 def getLayerRatio(layerIndex):
   layerRatio = 1
-  if(generateLargeNetworkRatio):
-    if(generateLargeNetworkRatioExponential):
-      layerRatio = largeNetworkRatio**layerIndex
+  if(generateLargeNetworkUntrained):
+    if(generateLargeNetworkExpansion):
+      if(generateLargeNetworkRatioExponential):
+        layerRatio = largeNetworkRatio**layerIndex
+      else:
+        layerRatio = largeNetworkRatio * layerIndex
     else:
-      layerRatio = largeNetworkRatio * layerIndex
+      layerRatio = largeNetworkRatio
   else:
     layerRatio = 1
-  
   return int(layerRatio)
 
 from __future__ import print_function

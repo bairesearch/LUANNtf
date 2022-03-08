@@ -143,24 +143,26 @@ if(numberOfHiddenLayers > 1):
 
 if(generateLargeNetworkUntrained):
   generateNetworkUntrained = True
-  generateLargeNetworkRatio = True
-  if(generateLargeNetworkRatio):
-    generateLargeNetworkRatioExponential = True
-    largeNetworkRatio = 10
+  largeNetworkRatio = 10  #100
+  generateLargeNetworkExpansion = False
+  if(generateLargeNetworkExpansion):
+    generateLargeNetworkRatioExponential = False
 else:
   generateNetworkUntrained = False
   generateLargeNetworkRatio = False
 
 def getLayerRatio(layerIndex):
   layerRatio = 1
-  if(generateLargeNetworkRatio):
-    if(generateLargeNetworkRatioExponential):
-      layerRatio = largeNetworkRatio**layerIndex
+  if(generateLargeNetworkUntrained):
+    if(generateLargeNetworkExpansion):
+      if(generateLargeNetworkRatioExponential):
+        layerRatio = largeNetworkRatio**layerIndex
+      else:
+        layerRatio = largeNetworkRatio * layerIndex
     else:
-      layerRatio = largeNetworkRatio * layerIndex
+      layerRatio = largeNetworkRatio
   else:
     layerRatio = 1
-  
   return int(layerRatio)
 
 x = tf.keras.layers.Input(shape=input_shape)
@@ -214,6 +216,7 @@ if(generateNetworkUntrained):
 y = tf.keras.layers.Dense(num_classes, activation='softmax')(hLast)
 model = tf.keras.Model(x, y)
 
+print(model.summary())
 
 model.compile(optimizer=tf.keras.optimizers.RMSprop(epsilon=1e-08), loss='categorical_crossentropy', metrics=['acc'])
 

@@ -117,8 +117,8 @@ if(supportMultipleNetworks):
 			#eg debugCompareMultipleNetworksPerformanceGain
 			numberOfNetworks = 10	#100	
 		else:
-			#numberOfNetworks = 10
 			numberOfNetworks = int(generateLargeNetworkRatioMax/generateLargeNetworkRatio) #normalise the number of networks based on the network layer size
+			#numberOfNetworks = 10	#optional override
 
 supportDimensionalityReductionLimitFrequency = False
 supportDimensionalityReductionInhibitNeurons = False
