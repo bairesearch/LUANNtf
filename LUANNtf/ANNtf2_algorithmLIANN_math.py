@@ -70,15 +70,6 @@ def calculateWeights(l, n_h, SVDinputMatrix, U, Sigma, VT):
 	return AW
 
 	
-
-def learningAlgorithmStochasticCalculateMetricCorrelation(A):
-	#print("A = ", A)	
-	meanCorrelation = calculateCorrelationMean(A)
-	print("meanCorrelation = ", meanCorrelation)
-	metric = 1 - meanCorrelation
-	#print("metric = ", metric)
-	return metric
-
 def calculateCorrelationMean(A):
 	correlationsOffDiagonal = calculateOffDiagonalCorrelationMatrix(A, nanReplacementValue=1.0, getOffDiagonalCorrelationMatrix=False)
 	meanCorrelation = calculateCorrelationMatrixOffDiagonalsMean(correlationsOffDiagonal)
@@ -92,10 +83,10 @@ def calculateCorrelationMean(A):
 	#mean = tf.expand_dims(mean, axis=1)
 	#differenceFromMean(tf.subtract(A, mean))
 	
-def calculateCorrelationMatrixOffDiagonalsMean(correlations):
+def calculateCorrelationMatrixOffDiagonalsMean(correlationsOffDiagonal):
 	#alternate methods:
-	correlations = np.abs(correlations)	#account for negative correlations
-	meanCorrelation = np.mean(correlations)
+	correlationsOffDiagonal = np.abs(correlationsOffDiagonal)	#account for negative correlations
+	meanCorrelation = np.mean(correlationsOffDiagonal)
 
 	#this method assumes bivariate normality - CHECKTHIS assumption is not violated
 	#https://www.researchgate.net/post/average_of_Pearson_correlation_coefficient_values
@@ -106,164 +97,6 @@ def calculateCorrelationMatrixOffDiagonalsMean(correlations):
 	#meanCorrelation = inverseFishersZ
 	return meanCorrelation
 	
-def learningAlgorithmStochasticCalculateMetricMaximiseAndEvenSignal(Afinal, metric1Weighting, metric2Weighting):	
-	#learning objective functions:
-	#1: maximise the signal (ie successfully uninhibited) across multiple batches (entire dataset)
-	#2: ensure that all layer neurons receive even activation across multiple batches (entire dataset)		
-	
-	#print("Afinal = ", Afinal) 
-
-	AfinalThresholded = tf.greater(Afinal, 0.0)	#threshold signal such that higher average weights are not preferenced
-	AfinalThresholded = tf.dtypes.cast(AfinalThresholded, dtype=tf.dtypes.float32)	
-	#print("Afinal = ", Afinal)
-	#print("AfinalThresholded = ", AfinalThresholded)
-	
-	metric1 = tf.reduce_mean(AfinalThresholded)	#average output across batch, across layer
-	
-	#stdDevAcrossLayer = tf.math.reduce_std(Afinal, axis=1)	#stddev calculated across layer [1 result per batch index]
-	#metric2 = tf.reduce_mean(stdDevAcrossLayer)	#average output across batch
-	
-	stdDevAcrossBatches = tf.math.reduce_mean(Afinal, axis=0)	 #for each dimension (k neuron in layer); calculate the mean across all batch indices
-	metric2 = tf.math.reduce_std(stdDevAcrossBatches)	#then calculate the std dev across these values
-	
-	metric1 = metric1.numpy()
-	metric2 = metric2.numpy()
-	#print("metric1 = ", metric1)
-	#print("metric2 = ", metric2)
-				
-	metric1 = metric1*metric1Weighting
-	metric2 = metric2*metric2Weighting
-	#print("metric1 = ", metric1)
-	#print("metric2 = ", metric2)
-	if(metric2 != 0):
-		metric = metric1/metric2
-	else:
-		metric = 0.0
-	
-	return metric
-	
-
-def neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf, Wfname="W", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=False, supportDimensionalityReductionRandomise=True, maxCorrelation=0.95):
-
-	resetNeuronIfSameValueAcrossBatch = False #reset neuron if all values of a neuron k being the same value across the batch
-	randomlySelectCorrelatedNeuronToReset = False	#randomly select one of each correlated neuron to reset
-	
-	useCorrelationMatrix = True	#only implementation currently available
-	
-	Atransposed = tf.transpose(A)
-	if(useCorrelationMatrix):
-		correlationMatrix = calculateOffDiagonalCorrelationMatrix(A, nanReplacementValue=0.0, getOffDiagonalCorrelationMatrix=True)	#off diagonal correlation matrix is required so that do not duplicate k1->k2 and k2->k1 correlations	#CHECKTHIS: nanReplacementValue
-		#nanReplacementValue=0.0; will set the correlation as 0 if all values of a neuron k being the same value across the batch		
-		#print("correlationMatrix = ", correlationMatrix)
-		#print("correlationMatrix.shape = ", correlationMatrix.shape)
-	
-	if(useCorrelationMatrix):
-		if(randomlySelectCorrelatedNeuronToReset):
-			correlationMatrixRotated = np.transpose(correlationMatrix)
-			k1MaxCorrelation = correlationMatrix.max(axis=0)
-			k2MaxCorrelation = correlationMatrixRotated.max(axis=0)
-			#print("k1MaxCorrelation = ", k1MaxCorrelation)
-			#print("k2MaxCorrelation = ", k2MaxCorrelation)
-			kSelect = np.random.randint(0, 2, size=k1MaxCorrelation.shape)
-			mask1 = kSelect.astype(bool)
-			mask2 = np.logical_not(mask1)
-			mask1 = mask1.astype(float)
-			mask2 = mask2.astype(float)
-			k1MaxCorrelation = np.multiply(k1MaxCorrelation, mask1)
-			k2MaxCorrelation = np.multiply(k2MaxCorrelation, mask2)
-			kMaxCorrelation = np.add(k1MaxCorrelation, k2MaxCorrelation)
-			#print("correlationMatrix = ", correlationMatrix)
-			#print("correlationMatrixRotated = ", correlationMatrixRotated)
-			#print("k1MaxCorrelation = ", k1MaxCorrelation)
-			#print("k2MaxCorrelation = ", k2MaxCorrelation)
-			#print("mask1 = ", mask1)
-			#print("mask2 = ", mask2)
-			#print("kMaxCorrelation = ", kMaxCorrelation)
-		else:
-			k1MaxCorrelation = correlationMatrix.max(axis=0)
-			k2MaxCorrelation = correlationMatrix.max(axis=1)
-			#k1MaxCorrelation = np.amax(correlationMatrix, axis=0)	#reduce max
-			#k2MaxCorrelation = np.amax(correlationMatrix, axis=1)	#reduce max
-			kMaxCorrelation = np.maximum(k1MaxCorrelation, k2MaxCorrelation)
-		#kMaxCorrelationIndex = correlationMatrix.argmax(axis=0)	#or axis=1
-		kMaxCorrelation = tf.convert_to_tensor(kMaxCorrelation, dtype=tf.dtypes.float32)	#make sure same type as A
-		#print("kMaxCorrelation;", kMaxCorrelation)
-		
-		if(resetNeuronIfSameValueAcrossBatch):
-			AbatchAllZero = tf.reduce_sum(A, axis=0)
-			AbatchAllZero = tf.equal(AbatchAllZero, 0.0)
-			AbatchAllZero = tf.cast(AbatchAllZero, tf.float32)
-			kMaxCorrelation = tf.add(kMaxCorrelation, AbatchAllZero)	#set kMaxCorrelation[k]=1.0 if AbatchAllZero[k]=True
-			#print("AbatchAllZero;", AbatchAllZero)
-
-	else:
-		#incomplete;
-		for k1 in range(n_h[l1]):
-			#calculate maximum correlation;
-			k1MaxCorrelation = 0.0
-			for k2 in range(n_h[l1]):
-				if(k1 != k2):
-					Ak1 = Atransposed[k1]	#Ak: 1d vector of batchsize
-					Ak2 = Atransposed[k2]	#Ak: 1d vector of batchsize
-					k1k2correlation = calculateCorrelation(Ak1, Ak2)	#undefined
-
-	#generate masks (based on highly correlated k/neurons);
-	#print("kMaxCorrelation = ", kMaxCorrelation)
-	kPassArray = tf.less(kMaxCorrelation, maxCorrelation)
-	randomiseLayerNeurons(networkIndex, n_h, l1, kPassArray, randomNormal, Wf, Wfname, Wb, Wbname, updateAutoencoderBackwardsWeights, supportSkipLayers, supportDimensionalityReductionRandomise)
-
-def randomiseLayerNeurons(networkIndex, n_h, l1, kPassArray, randomNormal, Wf, Wfname="W", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=False, supportDimensionalityReductionRandomise=True):
-	kFailArray = tf.logical_not(kPassArray)
-	#print("kPassArray = ", kPassArray)
-	#print("kFailArray = ", kFailArray)
-	kPassArrayF = tf.expand_dims(kPassArray, axis=0)
-	kFailArrayF = tf.expand_dims(kFailArray, axis=0)
-	kPassArrayF = tf.cast(kPassArrayF, tf.float32)
-	kFailArrayF = tf.cast(kFailArrayF, tf.float32)
-	if(updateAutoencoderBackwardsWeights):
-		kPassArrayB = tf.expand_dims(kPassArray, axis=1)
-		kFailArrayB = tf.expand_dims(kFailArray, axis=1)
-		kPassArrayB = tf.cast(kPassArrayB, tf.float32)
-		kFailArrayB = tf.cast(kFailArrayB, tf.float32)
-
-	#apply masks to weights (randomise specific k/neurons);					
-	if(supportSkipLayers):
-		for l2 in range(0, l1):
-			if(l2 < l1):
-				#randomize or zero
-				if(supportDimensionalityReductionRandomise):
-					WlayerFrand = randomNormal([n_h[l2], n_h[l1]])
-				else:
-					WlayerFrand = tf.zeros([n_h[l2], n_h[l1]], dtype=tf.dtypes.float32)
-				Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, Wfname)] = applyMaskToWeights(Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, Wfname)], WlayerFrand, kPassArrayF, kFailArrayF)
-				if(updateAutoencoderBackwardsWeights):
-					if(supportDimensionalityReductionRandomise):
-						WlayerBrand = randomNormal([n_h[l1], n_h[l2]])
-					else:
-						WlayerBrand = tf.zeros([n_h[l1], n_h[l2]], dtype=tf.dtypes.float32)
-					Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, Wbname)] = applyMaskToWeights(Wb[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, Wbname)], WlayerBrand, kPassArrayB, kFailArrayB)		
-	else:
-		if(supportDimensionalityReductionRandomise):
-			WlayerFrand = randomNormal([n_h[l1-1], n_h[l1]]) 
-		else:
-			WlayerFrand = tf.zeros([n_h[l1-1], n_h[l1]], dtype=tf.dtypes.float32)
-		Wf[generateParameterNameNetwork(networkIndex, l1, Wfname)] = applyMaskToWeights(Wf[generateParameterNameNetwork(networkIndex, l1, Wfname)], WlayerFrand, kPassArrayF, kFailArrayF)
-		if(updateAutoencoderBackwardsWeights):
-			if(supportDimensionalityReductionRandomise):
-				WlayerBrand = randomNormal([n_h[l1], n_h[l1-1]])
-			else:
-				WlayerBrand = tf.zeros([n_h[l1], n_h[l1-1]], dtype=tf.dtypes.float32)		
-			Wb[generateParameterNameNetwork(networkIndex, l1, Wbname)] = applyMaskToWeights(Wb[generateParameterNameNetwork(networkIndex, l1, Wbname)], WlayerBrand, kPassArrayB, kFailArrayB)
-
-def applyMaskToWeights(Wlayer, WlayerRand, kPassArray, kFailArray):
-	WlayerFail = tf.multiply(WlayerRand, kFailArray)
-	#print("WlayerFail = ", WlayerFail)
-	WlayerPass = tf.multiply(Wlayer, kPassArray)
-	#print("WlayerPass = ", WlayerPass)
-	Wlayer = tf.add(WlayerPass, WlayerFail)
-	return Wlayer
-
-
 def calculateOffDiagonalCorrelationMatrix(A, nanReplacementValue=1.0, getOffDiagonalCorrelationMatrix=True):
 	Anumpy = A.numpy()
 	correlationMatrixX = np.transpose(Anumpy)	#2-D array containing multiple variables and observations. Each row of x represents a variable, and each column a single observation of all those variables. Also see rowvar below.	#https://numpy.org/doc/stable/reference/generated/numpy.corrcoef.html
@@ -285,14 +118,4 @@ def calculateOffDiagonalCorrelationMatrix(A, nanReplacementValue=1.0, getOffDiag
 		return correlationMatrixOffDiagonal
 	else:
 		return correlationsOffDiagonal
-	
-def neuronActivationRegularisation(networkIndex, n_h, l1, A, randomNormal, Wf, Wfname="W", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=False, supportDimensionalityReductionRandomise=True, supportDimensionalityReductionRegulariseActivityMinAvg=0.1, supportDimensionalityReductionRegulariseActivityMaxAvg=0.9):
-	#CHECKTHIS: treat any level/intensity of activation the same
-	Aactive = tf.cast(A, tf.bool)
-	AactiveFloat = tf.cast(Aactive, tf.float32)
-	neuronActivationFrequency = tf.reduce_mean(AactiveFloat, axis=0)
-	print("neuronActivationFrequency = ", neuronActivationFrequency)
-	kPassArray = tf.logical_and(tf.greater(neuronActivationFrequency, supportDimensionalityReductionRegulariseActivityMinAvg), tf.less(neuronActivationFrequency, supportDimensionalityReductionRegulariseActivityMaxAvg))
-	print("kPassArray = ", kPassArray)
-	randomiseLayerNeurons(networkIndex, n_h, l1, kPassArray, randomNormal, Wf, Wfname, Wb, Wbname, updateAutoencoderBackwardsWeights, supportSkipLayers, supportDimensionalityReductionRandomise)
 	

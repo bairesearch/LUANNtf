@@ -34,8 +34,8 @@ debugFastTrain = False	#not supported
 debugCompareMultipleNetworksPerformanceGain = False
 
 #select learningAlgorithm:
-learningAlgorithmLIANN = False	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only
 learningAlgorithmNone = True	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
+learningAlgorithmLIANN = False	#support disabled (see ANNtf2_algorithmLIANN)	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only	
 
 #intialise network properties (configurable);	
 useSparsity = True
@@ -126,35 +126,15 @@ if(supportMultipleNetworks):
 			numberOfNetworks = int(generateLargeNetworkRatioMax/generateLargeNetworkRatio) #normalise the number of networks based on the network layer size
 			#numberOfNetworks = 10	#optional override
 
-supportDimensionalityReductionLimitFrequency = False
-supportDimensionalityReductionInhibitNeurons = False
 if(supportDimensionalityReduction):
+	#learningAlgorithmLIANN support currently disabled while testing LIANN algorithm (see ANNtf2_algorithmLIANN)
+	#supportDimensionalityReductionAlgorithmX = False
 	
-	supportDimensionalityReductionInhibitNeurons = True	#learn to inhibit neurons in net for a given task
-	supportDimensionalityReductionMinimiseCorrelation = False #orig mode
-	supportDimensionalityReductionRegulariseActivity = False	#reset neurons that are rarely used/fire (or are used/fire too often) across batches (batchSize >> numClasses) - indicates they do not contain useful information
-	
-	if(supportDimensionalityReductionMinimiseCorrelation):
-		maxCorrelation = 0.95	#requires tuning
-		supportDimensionalityReductionRandomise	= True	#randomise weights of highly correlated neurons, else zero them (effectively eliminating neuron from network, as its weights are no longer able to be trained)
-	#if(supportDimensionalityReductionInhibitNeurons):
-	
-	if(supportDimensionalityReductionRegulariseActivity):
-		supportDimensionalityReductionRegulariseActivityMinAvg = 0.01	#requires tuning
-		supportDimensionalityReductionRegulariseActivityMaxAvg = 0.99	#requires tuning
-		supportDimensionalityReductionRandomise	= True
-	
-	if(supportDimensionalityReductionInhibitNeurons):
-		supportDimensionalityReductionFirstPhaseOnly = False
-	else:
-		supportDimensionalityReductionFirstPhaseOnly = True	#perform LIANN in first phase only (x epochs of training), then apply hebbian learning at final layer
-	if(supportDimensionalityReductionFirstPhaseOnly):
-		supportDimensionalityReductionLimitFrequency = False
-		supportDimensionalityReductionFirstPhaseOnlyNumEpochs = 1
-	else:
-		supportDimensionalityReductionLimitFrequency = True
-		if(supportDimensionalityReductionLimitFrequency):
-			supportDimensionalityReductionLimitFrequencyStep = 1000
+	supportDimensionalityReductionFirstPhaseOnly = False	#perform LIANN in first phase only (x epochs of training), then apply hebbian learning at final layer
+	supportDimensionalityReductionLimitFrequency = False
+	if(supportDimensionalityReductionLimitFrequency):
+		supportDimensionalityReductionLimitFrequencyStep = 1000	
+
 
 			
 #network/activation parameters;
@@ -426,9 +406,10 @@ def neuralNetworkPropagationLUANN(x, y=None, layer=None, networkIndex=1, dimensi
 		maxLayer = layer
 	#print("maxLayer = ", maxLayer)
 	
-	if(dimensionalityReduction):
-		if(supportDimensionalityReductionInhibitNeurons):
-			lossCurrent = calculatePropagationLoss(x, y, networkIndex)
+	#moved 15 Mar 2022
+	#if(dimensionalityReduction):
+	#	if(supportDimensionalityReductionInhibitNeurons):
+	#		lossCurrent = calculatePropagationLoss(x, y, networkIndex)
 
 	for l1 in range(1, maxLayer+1):	#ignore first layer
 		
@@ -439,29 +420,9 @@ def neuralNetworkPropagationLUANN(x, y=None, layer=None, networkIndex=1, dimensi
 		if(dimensionalityReduction):
 			if(l1 < numberOfLayers): #ignore last layer	#OLD: if(l1 < maxLayer):
 				#print("dimensionalityReduction")
-				if(supportDimensionalityReductionMinimiseCorrelation):
-					ANNtf2_algorithmLIANN_math.neuronActivationCorrelationMinimisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, maxCorrelation=maxCorrelation)
-				if(supportDimensionalityReductionRegulariseActivity):
-					ANNtf2_algorithmLIANN_math.neuronActivationRegularisation(networkIndex, n_h, l1, A, randomNormal, Wf=Wf, Wfname="Wf", Wb=None, Wbname=None, updateAutoencoderBackwardsWeights=False, supportSkipLayers=supportSkipLayers, supportDimensionalityReductionRandomise=supportDimensionalityReductionRandomise, supportDimensionalityReductionRegulariseActivityMinAvg=supportDimensionalityReductionRegulariseActivityMinAvg, supportDimensionalityReductionRegulariseActivityMaxAvg=supportDimensionalityReductionRegulariseActivityMaxAvg)
-				if(supportDimensionalityReductionInhibitNeurons):
-					#randomly select a neuron k on layer to trial inhibition performance;
-					Nactivelayer = Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")]
-					NactivelayerBackup = Nactivelayer #tf.Variable(Nactivelayer)
-					layerInhibitionIndex = tf.cast(randomUniformIndex([1])*n_h[l1], tf.int32)[0].numpy()
-					print("layerInhibitionIndex = ", layerInhibitionIndex)
-					Nactivelayer = tf.Variable(modifyTensorRowColumn(Nactivelayer, True, layerInhibitionIndex, 0.0, False))	#tf.Variable added to retain formatting
-					#print("NactivelayerBackup = ", NactivelayerBackup)
-					#print("Nactivelayer = ", Nactivelayer)
-					Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")] = Nactivelayer
-					loss = calculatePropagationLoss(x, y, networkIndex)
-					#acc = calculateAccuracy(pred, target)	#only valid for softmax class targets 
-					if(loss < lossCurrent):
-						lossCurrent = loss
-						print("loss < lossCurrent")
-					else:
-						Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")] = NactivelayerBackup
-						print("loss !< lossCurrent")
-
+				#learningAlgorithmLIANN support currently disabled while developing LIANN algorithm (see ANNtf2_algorithmLIANN)
+				#if(supportDimensionalityReductionAlgorithmX):
+					
 		AprevLayer = A	#CHECKTHIS: note uses A value prior to weight updates
 		if(recordNetworkTrace):
 			Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = Z
