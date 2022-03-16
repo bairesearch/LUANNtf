@@ -38,6 +38,9 @@ learningAlgorithmLIANN = False	#create a very large network (eg x10) neurons per
 learningAlgorithmNone = True	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
 
 #intialise network properties (configurable);	
+useSparsity = True
+if(useSparsity):
+  sparsityProbabilityOfConnection = 0.1 #1-sparsity
 supportSkipLayers = False #fully connected skip layer network
 supportMultipleNetworks = False	#optional
 if(debugCompareMultipleNetworksPerformanceGain):
@@ -81,7 +84,10 @@ elif(learningAlgorithmNone):
 	supportDimensionalityReduction = False
 
 if(generateVeryLargeNetwork):
-	generateLargeNetworkRatioMax = 100	#maximum number of neurons per layer required to provide significant performance
+	if(useSparsity):
+		generateLargeNetworkRatioMax = 1000
+	else:
+		generateLargeNetworkRatioMax = 100	#maximum number of neurons per layer required to provide significant performance
 	if(supportMultipleNetworks):
 		if(shareComputationalUnits and shareComputationalUnitsLayersExponentialDivergence):
 			generateLargeNetworkRatio = 1
@@ -233,6 +239,15 @@ def defineNetworkParameters(num_input_neurons, num_output_neurons, datasetNumFea
 	return numberOfLayers
 	
 
+def generateWeights(shape):
+	initialisedWeights = randomNormal(shape) 
+	if(useSparsity):
+		sparsityMatrixMask = tf.random.uniform(shape, minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
+		sparsityMatrixMask = tf.math.less(sparsityMatrixMask, sparsityProbabilityOfConnection)
+		sparsityMatrixMask = tf.cast(sparsityMatrixMask, dtype=tf.dtypes.float32)
+		initialisedWeights = tf.multiply(initialisedWeights, sparsityMatrixMask)	
+	return initialisedWeights
+
 def defineNeuralNetworkParameters():
 
 	print("numberOfNetworks", numberOfNetworks)
@@ -265,11 +280,11 @@ def defineNeuralNetworkParameters():
 			exit()
 		if(shareComputationalUnitsChecks):
 			if(shareComputationalUnitsLayers):
-				WfSharedComputationalUnitsLayers = randomNormal([numberOfSharedComputationalUnitsLayers, n_h[1], n_h[1]])	#for every sharedComputationalUnitLayer, number of neurons on prior layer, number of neurons on current layer
+				WfSharedComputationalUnitsLayers = generateWeights([numberOfSharedComputationalUnitsLayers, n_h[1], n_h[1]])	#for every sharedComputationalUnitLayer, number of neurons on prior layer, number of neurons on current layer
 				BSharedComputationalUnitsLayers = tf.zeros([numberOfSharedComputationalUnitsLayers, n_h[1]])
 			elif(shareComputationalUnitsNeurons):		
 				#current shareComputationalUnitsNeurons implementation requires enough GPU Ram to create and store a large numberOfSharedComputationalUnitsNeurons x staticHiddenLayerNumberNeurons weight array
-				WfSharedComputationalUnitsNeurons = randomNormal([numberOfSharedComputationalUnitsNeurons, n_h[1]])	#for every sharedComputationalUnitNeuron, number of neurons on a prior layer
+				WfSharedComputationalUnitsNeurons = generateWeights([numberOfSharedComputationalUnitsNeurons, n_h[1]])	#for every sharedComputationalUnitNeuron, number of neurons on a prior layer
 				BSharedComputationalUnitsNeurons = tf.zeros(numberOfSharedComputationalUnitsNeurons)
 			
 	for networkIndex in range(1, numberOfNetworks+1):
@@ -297,10 +312,10 @@ def defineNeuralNetworkParameters():
 					if(supportSkipLayers):
 						for l2 in range(0, l1):
 							if(l2 < l1):
-								WlayerF = randomNormal([n_h[l2], n_h[l1]]) 
+								WlayerF = generateWeights([n_h[l2], n_h[l1]]) 
 								Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = tf.Variable(WlayerF)
 					else:
-						WlayerF = randomNormal([n_h[l1-1], n_h[l1]]) 
+						WlayerF = generateWeights([n_h[l1-1], n_h[l1]]) 
 						Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")] = tf.Variable(WlayerF)
 					Blayer = tf.zeros(n_h[l1])
 					B[generateParameterNameNetwork(networkIndex, l1, "B")] = tf.Variable(Blayer)
