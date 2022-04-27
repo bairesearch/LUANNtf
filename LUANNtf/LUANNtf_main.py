@@ -21,7 +21,7 @@ python3 -m spacy download en_core_web_md
 python3 LUANNtf_main.py
 
 # Description:
-LUANN - train an LUANN (autoencoder artificial neural network)
+LUANNtf - train last layer of a large untrained artificial neural network (LUANN)
 
 """
 
@@ -132,10 +132,10 @@ def neuralNetworkPropagationAllNetworksFinalLayer(x):
 def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display):
 	
 	executeFinalLayerHebbianLearning = True
-	if(LUANNtf_algorithm.supportDimensionalityReduction):
-		if(LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnly):
-			if(e < LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnlyNumEpochs):
-				executeFinalLayerHebbianLearning = False
+	#if(LUANNtf_algorithm.supportDimensionalityReduction):
+	#	if(LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnly):
+	#		if(e < LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnlyNumEpochs):
+	#			executeFinalLayerHebbianLearning = False
 
 	#print("trainMultipleFiles error: does not support greedy training for LUANN")
 	if(executeFinalLayerHebbianLearning):
@@ -146,19 +146,19 @@ def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers,
 		else:
 			loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex)
 	
-	if(LUANNtf_algorithm.supportDimensionalityReduction):
-		executeLIANN = False
-		if(LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnly):
-			if(e < LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnlyNumEpochs):
-				executeLIANN = True			
-		elif(LUANNtf_algorithm.supportDimensionalityReductionLimitFrequency):
-			if(batchIndex % LUANNtf_algorithm.supportDimensionalityReductionLimitFrequencyStep == 0):
-				executeLIANN = True
-		else:
-			executeLIANN = True
-		if(executeLIANN):
-			#print("executeLIANN")
-			LUANNtf_algorithm.neuralNetworkPropagationLUANNdimensionalityReduction(batchX, batchY, networkIndex)	
+	#if(LUANNtf_algorithm.supportDimensionalityReduction):
+	#	executeLIANN = False
+	#	if(LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnly):
+	#		if(e < LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnlyNumEpochs):
+	#			executeLIANN = True			
+	#	elif(LUANNtf_algorithm.supportDimensionalityReductionLimitFrequency):
+	#		if(batchIndex % LUANNtf_algorithm.supportDimensionalityReductionLimitFrequencyStep == 0):
+	#			executeLIANN = True
+	#	else:
+	#		executeLIANN = True
+	#	if(executeLIANN):
+	#		#print("executeLIANN")
+	#		LUANNtf_algorithm.neuralNetworkPropagationLUANNdimensionalityReduction(batchX, batchY, networkIndex)	
 
 	pred = None
 	if(display):

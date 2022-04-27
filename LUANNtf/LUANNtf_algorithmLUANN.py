@@ -13,7 +13,7 @@ see LUANNtf_main.py
 see LUANNtf_main.py
 
 # Description:
-LUANN algorithm LUANN - define large untrained artificial neural network
+LUANNtf algorithm LUANN - define large untrained artificial neural network
 
 """
 
@@ -23,7 +23,7 @@ import copy
 from ANNtf2_operations import *	#generateParameterNameSeq, generateParameterName, defineNetworkParameters
 import ANNtf2_operations
 import ANNtf2_globalDefs
-import ANNtf2_algorithmLIANN_math	#required for supportDimensionalityReduction
+#import LIANNtf_algorithmLIANN_math	#required for supportDimensionalityReduction
 np.set_printoptions(suppress=True)
 
 #debug parameters;
@@ -35,7 +35,7 @@ debugCompareMultipleNetworksPerformanceGain = False
 
 #select learningAlgorithm:
 learningAlgorithmNone = True	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
-learningAlgorithmLIANN = False	#support disabled (see ANNtf2_algorithmLIANN)	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only	
+#learningAlgorithmLIANN = False	#support disabled (see LIANNtf_algorithmLIANN)	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only	
 
 #intialise network properties (configurable);	
 useSparsity = True
@@ -74,14 +74,14 @@ if(generateNetworkStatic):
 		
 #learning algorithm customisation;
 generateVeryLargeNetwork = False
-if(learningAlgorithmLIANN):
-	if(not debugSmallNetwork):
-		generateVeryLargeNetwork = True	#default: True
-	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
-elif(learningAlgorithmNone):
+if(learningAlgorithmNone):
 	#can pass different task datasets through a shared randomised net
 	generateVeryLargeNetwork = True
-	supportDimensionalityReduction = False
+	#supportDimensionalityReduction = False
+#elif(learningAlgorithmLIANN):
+#	if(not debugSmallNetwork):
+#		generateVeryLargeNetwork = True	#default: True
+#	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
 
 if(generateVeryLargeNetwork):
 	if(useSparsity):
@@ -126,14 +126,14 @@ if(supportMultipleNetworks):
 			numberOfNetworks = int(generateLargeNetworkRatioMax/generateLargeNetworkRatio) #normalise the number of networks based on the network layer size
 			#numberOfNetworks = 10	#optional override
 
-if(supportDimensionalityReduction):
-	#learningAlgorithmLIANN support currently disabled while testing LIANN algorithm (see ANNtf2_algorithmLIANN)
-	#supportDimensionalityReductionAlgorithmX = False
-	
-	supportDimensionalityReductionFirstPhaseOnly = False	#perform LIANN in first phase only (x epochs of training), then apply hebbian learning at final layer
-	supportDimensionalityReductionLimitFrequency = False
-	if(supportDimensionalityReductionLimitFrequency):
-		supportDimensionalityReductionLimitFrequencyStep = 1000	
+#learningAlgorithmLIANN support currently disabled (see LIANNtf_algorithmLIANN)
+#if(supportDimensionalityReduction):
+#	#supportDimensionalityReductionAlgorithmX = False
+#	
+#	supportDimensionalityReductionFirstPhaseOnly = False	#perform LIANN in first phase only (x epochs of training), then apply hebbian learning at final layer
+#	supportDimensionalityReductionLimitFrequency = False
+#	if(supportDimensionalityReductionLimitFrequency):
+#		supportDimensionalityReductionLimitFrequencyStep = 1000	
 
 
 			
@@ -164,8 +164,8 @@ if(shareComputationalUnits):
 		BSharedComputationalUnitsNeurons = None
 		BIndex = {}
 		#WfSharedComputationalUnitsSubnets	#not currently implemented
-if(supportDimensionalityReductionInhibitNeurons):
-  Nactive = {}  #effective bool [1.0 or 0.0]; whether neuron is active/inhibited
+#if(inhibitionAlgorithmBinary):
+#	Nactive = {}  #effective bool [1.0 or 0.0]; whether neuron is active/inhibited
 
 #Network parameters;
 n_h = []
@@ -325,9 +325,9 @@ def defineNeuralNetworkParameters():
 					Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))
 					Atrace[generateParameterNameNetwork(networkIndex, l1, "Atrace")] = tf.Variable(tf.zeros([batchSize, n_h[l1]], dtype=tf.dtypes.float32))				
 			
-			if(supportDimensionalityReductionInhibitNeurons):
-				Nactivelayer = tf.ones(n_h[l1])
-				Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")] = tf.Variable(Nactivelayer)
+			#if(inhibitionAlgorithmBinary):
+			#	Nactivelayer = tf.ones(n_h[l1])
+			#	Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")] = tf.Variable(Nactivelayer)
 	
 	if(supportMultipleNetworks):
 		global WallNetworksFinalLayer
@@ -377,8 +377,8 @@ def neuralNetworkPropagationAllNetworksFinalLayer(AprevLayer):
 	return pred
 
 #if(supportDimensionalityReduction):	
-def neuralNetworkPropagationLUANNdimensionalityReduction(x, y=None, networkIndex=1):
-	return neuralNetworkPropagationLUANN(x, y=y, layer=None, networkIndex=networkIndex, dimensionalityReduction=True)
+#def neuralNetworkPropagationLUANNdimensionalityReduction(x, y=None, networkIndex=1):
+#	return neuralNetworkPropagationLUANN(x, y=y, layer=None, networkIndex=networkIndex, dimensionalityReduction=True)
 
 def calculatePropagationLoss(x, y, networkIndex=1):
 	costCrossEntropyWithLogits = False
@@ -389,7 +389,7 @@ def calculatePropagationLoss(x, y, networkIndex=1):
 	return lossCurrent
 
 def neuralNetworkPropagationLUANN(x, y=None, layer=None, networkIndex=1, dimensionalityReduction=False):
-	#y is only used by supportDimensionalityReductionInhibitNeurons
+	#y is only used by inhibitionAlgorithmBinary
 
 	pred = None 
 	
@@ -408,7 +408,7 @@ def neuralNetworkPropagationLUANN(x, y=None, layer=None, networkIndex=1, dimensi
 	
 	#moved 15 Mar 2022
 	#if(dimensionalityReduction):
-	#	if(supportDimensionalityReductionInhibitNeurons):
+	#	if(inhibitionAlgorithmBinary):
 	#		lossCurrent = calculatePropagationLoss(x, y, networkIndex)
 
 	for l1 in range(1, maxLayer+1):	#ignore first layer
@@ -417,11 +417,11 @@ def neuralNetworkPropagationLUANN(x, y=None, layer=None, networkIndex=1, dimensi
 		
 		A, Z = neuralNetworkPropagationLayerForward(l1, AprevLayer, networkIndex)
 	
-		if(dimensionalityReduction):
-			if(l1 < numberOfLayers): #ignore last layer	#OLD: if(l1 < maxLayer):
-				#print("dimensionalityReduction")
-				#learningAlgorithmLIANN support currently disabled while developing LIANN algorithm (see ANNtf2_algorithmLIANN)
-				#if(supportDimensionalityReductionAlgorithmX):
+		#learningAlgorithmLIANN support currently disabled (see LIANNtf_algorithmLIANN)
+		#if(dimensionalityReduction):
+		#	if(l1 < numberOfLayers): #ignore last layer	#OLD: if(l1 < maxLayer):
+		#		#print("dimensionalityReduction")
+		#		if(supportDimensionalityReductionAlgorithmX):
 					
 		AprevLayer = A	#CHECKTHIS: note uses A value prior to weight updates
 		if(recordNetworkTrace):
@@ -509,8 +509,8 @@ def neuralNetworkPropagationLayerForward(l1, AprevLayer, networkIndex=1):
 				#print("Blayer = ", Blayer)
 				Z = tf.add(tf.matmul(AprevLayer, WlayerF), Blayer)
 
-		if(supportDimensionalityReductionInhibitNeurons):
-			Z = tf.multiply(Z, Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")])
+		#if(inhibitionAlgorithmBinary):
+		#	Z = tf.multiply(Z, Nactive[generateParameterNameNetwork(networkIndex, l1, "Nactive")])
 
 		A = activationFunction(Z)
 	
