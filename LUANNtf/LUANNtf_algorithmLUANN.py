@@ -1,7 +1,7 @@
 """LUANNtf_algorithmLUANN.py
 
 # Author:
-Richard Bruce Baxter - Copyright (c) 2020-2022 Baxter AI (baxterai.com)
+Richard Bruce Baxter - Copyright (c) 2022 Baxter AI (baxterai.com)
 
 # License:
 MIT License
@@ -466,7 +466,8 @@ def neuralNetworkPropagationLayerForward(l1, AprevLayer, networkIndex=1):
 				Z = tf.zeros(Ztrace[generateParameterNameNetwork(networkIndex, l1, "Ztrace")].shape)
 				for l2 in range(0, l1):
 					WlayerF = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
-					Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF), Blayer))	
+					Z = tf.add(Z, tf.matmul(Atrace[generateParameterNameNetwork(networkIndex, l2, "Atrace")], WlayerF))	
+				Z = tf.add(Z, Blayer)
 			else:	
 				WlayerF = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
 				Z = tf.add(tf.matmul(AprevLayer, WlayerF), Blayer)
@@ -496,7 +497,8 @@ def neuralNetworkPropagationLayerForward(l1, AprevLayer, networkIndex=1):
 							WlayerF = tf.gather(WfSharedComputationalUnitsLayers, WlayerFIndex)
 						elif(shareComputationalUnitsNeurons):
 							WlayerF = tf.gather(WfSharedComputationalUnitsNeurons, WlayerFIndex)
-						Z = tf.add(Z, tf.add(tf.matmul(Atrace[generateParameterNameNetwork(networkIndexl2, l2, "Atrace")], WlayerF), Blayer))	
+						Z = tf.add(Z, tf.matmul(Atrace[generateParameterNameNetwork(networkIndexl2, l2, "Atrace")], WlayerF))	
+				Z = tf.add(Z, Blayer)
 			else:
 				#dynamically generate layer weights;
 				WlayerFIndex = WfIndex[generateParameterNameNetwork(networkIndex, l1, "WfIndex")]
