@@ -21,6 +21,7 @@ import tensorflow as tf
 import numpy as np
 import ANNtf2_globalDefs
 import math
+from tensorflow.keras.layers.experimental import preprocessing	#for normalization
 
 debugSingleLayerNetwork = False
 

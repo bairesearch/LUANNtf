@@ -171,6 +171,14 @@ else:
 
 storeRowLengths = False
 
+def normaliseDataset(dataset):
+	#print("before normalisation: dataset = ", dataset)
+	layer = tf.keras.layers.experimental.preprocessing.Normalization(axis=-1)
+	layer.adapt(dataset)
+	datasetNormalised = layer(dataset)
+	#print("after normalisation: datasetNormalised = ", datasetNormalised)
+	return datasetNormalised
+	
 def createFileAbsPath(fileName):
 	scriptFolder = os.path.dirname(__file__) #<-- absolute dir the script is in
 	relFilePath = datasetFolderRelative + '/' + fileName
@@ -314,7 +322,7 @@ def hotEncode(y, maxY):
 	yHotEncoded[y-1] = 1
 	return yHotEncoded
 			
-def loadDatasetType1(datasetFileNameX, datasetFileNameY, addOnlyPriorUnidirectionalPOSinputToTrain=False, dataType=float):
+def loadDatasetType1(datasetFileNameX, datasetFileNameY, addOnlyPriorUnidirectionalPOSinputToTrain=False, dataType=float, normalise=False):
 	
 	#all_X = genfromtxt(datasetFileNameX, delimiter=' ', dtype=dataType)
 	#all_Y = genfromtxt(datasetFileNameY, delimiter=' ', dtype=dataType)
@@ -368,12 +376,16 @@ def loadDatasetType1(datasetFileNameX, datasetFileNameY, addOnlyPriorUnidirectio
 	train_y, test_y = np.array(train_y, np.uint8), np.array(test_y, np.uint8) 
 	#https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data?version=stable
 	#https://medium.com/@HojjatA/could-not-find-valid-device-for-node-while-eagerly-executing-8f2ff588d1e
-	
+
+	if(normalise):
+		train_x = normaliseDataset(train_x)
+		test_x = normaliseDataset(test_x)
+				
 	paddingTagIndexNA = paddingTagIndex
 	return numberOfFeaturesPerWord, paddingTagIndexNA, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y
 
 
-def loadDatasetType2(datasetFileName, classColumnFirst=True, equaliseNumberExamplesPerClass=False, dataType=float):
+def loadDatasetType2(datasetFileName, classColumnFirst=True, equaliseNumberExamplesPerClass=False, dataType=float, normalise=False):
 
 	numeriseClassColumn = True
 	
@@ -462,10 +474,14 @@ def loadDatasetType2(datasetFileName, classColumnFirst=True, equaliseNumberExamp
 	#https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data?version=stable
 	#https://medium.com/@HojjatA/could-not-find-valid-device-for-node-while-eagerly-executing-8f2ff588d1e
 
+	if(normalise):
+		train_x = normaliseDataset(train_x)
+		test_x = normaliseDataset(test_x)
+		
 	return datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y
 	
 
-def loadDatasetType3(datasetFileNameX, generatePOSunambiguousInput, onlyAddPOSunambiguousInputToTrain, useSmallSentenceLengths, dataType=float):
+def loadDatasetType3(datasetFileNameX, generatePOSunambiguousInput, onlyAddPOSunambiguousInputToTrain, useSmallSentenceLengths, dataType=float, normalise=False):
 		
 	padExamples = True
 	cropExamples = True
@@ -707,6 +723,10 @@ def loadDatasetType3(datasetFileNameX, generatePOSunambiguousInput, onlyAddPOSun
 		#https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data?version=stable
 		#https://medium.com/@HojjatA/could-not-find-valid-device-for-node-while-eagerly-executing-8f2ff588d1e
 
+	if(normalise):
+		train_x = normaliseDataset(train_x)
+		test_x = normaliseDataset(test_x)
+		
 	return numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y
 
 

@@ -18,6 +18,7 @@ conda install spacy
 python3 -m spacy download en_core_web_md
 
 # Usage:
+source activate anntf2
 python3 LUANNtf_main.py
 
 # Description:
@@ -48,20 +49,26 @@ suppressGradientDoNotExistForVariablesWarnings = True
 
 useSmallSentenceLengths = False
 
-trainMultipleFiles = False
+trainMultipleNetworks = False	#initialise (dependent var)
+trainMultipleNetworksSelect = False	#initialise (dependent var)
+trainMultipleNetworksMerge = False	#initialise (dependent var)
+
+#intialise training properties (configurable);
 if(LUANNtf_algorithm.supportMultipleNetworks):
 	trainMultipleNetworks = True
-else:
-	trainMultipleNetworks = False
-if(trainMultipleNetworks):
+	if(LUANNtf_algorithm.supportMultipleNetworksSelect):
+		trainMultipleNetworksSelect = True
+	else:
+		trainMultipleNetworksMerge = True
 	#numberOfNetworks = 10
 	numberOfNetworks = LUANNtf_algorithm.numberOfNetworks
 	if(numberOfNetworks == 1):	#train at least 2 networks (required for tensorflow code execution consistency)
-		trainMultipleNetworks = False
+		print("LUANNtf_main error: trainMultipleNetworks and (numberOfNetworks == 1) - must train at least 2 networks")
+		exit()
 else:
 	numberOfNetworks = 1
 
-
+trainMultipleFiles = False
 if(trainMultipleFiles):
 	randomiseFileIndexParse = True
 	fileIndexFirst = 0
@@ -131,6 +138,8 @@ def neuralNetworkPropagationAllNetworksFinalLayer(x):
 	
 def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display):
 	
+	loss, acc = (None, None)
+	
 	executeFinalLayerHebbianLearning = True
 	#if(LUANNtf_algorithm.supportDimensionalityReduction):
 	#	if(LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnly):
@@ -140,12 +149,12 @@ def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers,
 	#print("trainMultipleFiles error: does not support greedy training for LUANN")
 	if(executeFinalLayerHebbianLearning):
 		#print("executeFinalLayerHebbianLearning")
-		if(trainMultipleNetworks):
+		if(trainMultipleNetworksMerge):
 			#LUANNtf_algorithm.neuralNetworkPropagationLUANNallLayers(batchX, networkIndex)	#propagate without performing final layer optimisation	#why executed?
 			pass
 		else:
 			loss, acc = executeOptimisation(batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex)
-	
+			
 	#if(LUANNtf_algorithm.supportDimensionalityReduction):
 	#	executeLIANN = False
 	#	if(LUANNtf_algorithm.supportDimensionalityReductionFirstPhaseOnly):
@@ -162,33 +171,40 @@ def trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers,
 
 	pred = None
 	if(display):
-		if(not trainMultipleNetworks):
-			loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex)	#display final layer loss
-			print("networkIndex: %i, batchIndex: %i, loss: %f, accuracy: %f" % (networkIndex, batchIndex, loss, acc))
+		loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex)	#display final layer loss
+		print("networkIndex: %i, batchIndex: %i, loss: %f, train accuracy: %f" % (networkIndex, batchIndex, loss, acc))
+			
+	return loss, acc
 			
 def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, networkIndex=1):
 	with tf.GradientTape() as gt:
 		loss, acc = calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex)
-
-	l1 = numberOfLayers	#LUANN only ever perfoms weight optimisation of final layer
-	
+		
 	#must syncronise with defineNeuralNetworkParameters;
 	#train specific layer weights;
 	Wlist = []
 	Blist = []
-	if(LUANNtf_algorithm.supportSkipLayers):
-		for l2 in range(0, l1):
-			if(l2 < l1):
-				Wlist.append(LUANNtf_algorithm.Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")])
-	else:
-		Wlist.append(LUANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")])
+	
+	maxLayer = numberOfLayers
+	for l1 in range(1, maxLayer+1):
+		if((not LUANNtf_algorithm.onlyTrainFinalLayer) or (l1 == numberOfLayers)):	#LUANN only ever perfoms weight optimisation of final layer
+			if(LUANNtf_algorithm.supportSkipLayers):
+				for l2 in range(0, l1):
+					if(l2 < l1):
+						Wlist.append(LUANNtf_algorithm.Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")])
+			else:
+				Wlist.append(LUANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")])
 	Blist.append(LUANNtf_algorithm.B[generateParameterNameNetwork(networkIndex, l1, "B")])
+	
 	trainableVariables = Wlist + Blist
 	WlistLength = len(Wlist)
 	BlistLength = len(Blist)
 
 	gradients = gt.gradient(loss, trainableVariables)
-						
+	
+	if(LUANNtf_algorithm.debugPrintVerbose):
+		print("gradients = ", gradients)
+		
 	if(suppressGradientDoNotExistForVariablesWarnings):
 		optimizer.apply_gradients([
     		(grad, var) 
@@ -197,7 +213,7 @@ def executeOptimisation(x, y, datasetNumClasses, numberOfLayers, optimizer, netw
 			])
 	else:
 		optimizer.apply_gradients(zip(gradients, trainableVariables))
-		
+
 	return loss, acc
 					
 def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex=1):
@@ -205,23 +221,33 @@ def calculatePropagationLoss(x, y, datasetNumClasses, numberOfLayers, costCrossE
 
 	pred = LUANNtf_algorithm.neuralNetworkPropagationLUANNallLayers(x, networkIndex)
 	target = y 
-	#print("pred.shape = ", pred.shape)
-	#print("target.shape = ", target.shape)
 	loss = calculateLossCrossEntropy(pred, target, datasetNumClasses, costCrossEntropyWithLogits)
 	acc = calculateAccuracy(pred, target)	#only valid for softmax class targets 
-	#print("target = ", target)
-	#print("pred = ", pred)
-	#print("x = ", x)
-	#print("y = ", y)
-	#print("2 loss = ", loss)
-	#print("2 acc = ", acc)
-
-			
+	
 	return loss, acc
 
 
+#if(ANNtf2_algorithm.supportMultipleNetworksSelect):
 
-#if(ANNtf2_algorithm.supportMultipleNetworks):
+def testBatchAllNetworksOptimum(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits):
+	
+	print("testBatchAllNetworksOptimum")
+	
+	AfinalHiddenLayerList = []
+	maxAccuracy = 0.0 
+	for networkIndex in range(1, numberOfNetworks+1):
+		loss, acc = calculatePropagationLoss(batchX, batchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits, networkIndex)	#display final layer loss
+		#if(display):
+		#	print("networkIndex: %i, batchIndex: %i, loss: %f, accuracy: %f" % (networkIndex, batchIndex, loss, acc))
+		
+		#print("acc = ", acc)
+		if(acc > maxAccuracy):
+			maxAccuracy = acc
+	
+	print("All networks optimum accuracy: Test Accuracy: %f" % (maxAccuracy))
+
+
+#if(ANNtf2_algorithm.supportMultipleNetworksMerge):
 
 def testBatchAllNetworksFinalLayer(batchX, batchY, datasetNumClasses, numberOfLayers):
 	
@@ -234,8 +260,6 @@ def testBatchAllNetworksFinalLayer(batchX, batchY, datasetNumClasses, numberOfLa
 	pred = neuralNetworkPropagationAllNetworksFinalLayer(AfinalHiddenLayerTensor)
 	acc = calculateAccuracy(pred, batchY)
 	print("Combined network: Test Accuracy: %f" % (acc))
-	
-	
 	
 def trainBatchAllNetworksFinalLayer(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, costCrossEntropyWithLogits, display):
 	
@@ -265,7 +289,7 @@ def executeOptimisationAllNetworksFinalLayer(x, y, datasetNumClasses, optimizer)
 	trainableVariables = Wlist + Blist
 
 	gradients = gt.gradient(loss, trainableVariables)
-						
+					
 	if(suppressGradientDoNotExistForVariablesWarnings):
 		optimizer.apply_gradients([
     		(grad, var) 
@@ -287,7 +311,7 @@ def calculatePropagationLossAllNetworksFinalLayer(x, y, datasetNumClasses, costC
 	
 	
 		
-def loadDataset(fileIndex):
+def loadDataset(fileIndex, equaliseNumberExamplesPerClass=False, normalise=False):
 
 	global numberOfFeaturesPerWord
 	global paddingTagIndex
@@ -311,21 +335,21 @@ def loadDataset(fileIndex):
 			
 	numberOfLayers = 0
 	if(dataset == "POStagSequence"):
-		numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf2_loadDataset.loadDatasetType1(datasetType1FileNameX, datasetType1FileNameY)
+		numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y = ANNtf2_loadDataset.loadDatasetType1(datasetType1FileNameX, datasetType1FileNameY, normalise=normalise)
 	elif(dataset == "POStagSentence"):
-		numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf2_loadDataset.loadDatasetType3(datasetType3FileNameX, generatePOSunambiguousInput, onlyAddPOSunambiguousInputToTrain, useSmallSentenceLengths)
+		numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y = ANNtf2_loadDataset.loadDatasetType3(datasetType3FileNameX, generatePOSunambiguousInput, onlyAddPOSunambiguousInputToTrain, useSmallSentenceLengths, normalise=normalise)
 	elif(dataset == "SmallDataset"):
-		datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp = ANNtf2_loadDataset.loadDatasetType2(datasetType2FileName, datasetClassColumnFirst)
+		datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y = ANNtf2_loadDataset.loadDatasetType2(datasetType2FileName, datasetClassColumnFirst, equaliseNumberExamplesPerClass=equaliseNumberExamplesPerClass, normalise=normalise)
 		numberOfFeaturesPerWord = None
 		paddingTagIndex = None
 	elif(dataset == "wikiXmlDataset"):
 		articles = ANNtf2_loadDataset.loadDatasetType4(datasetType4FileName, LUANNsequentialInputTypesMaxLength, useSmallSentenceLengths, LUANNsequentialInputTypeTrainWordVectors)
-
+	
 	if(dataset == "wikiXmlDataset"):
 		return articles
 	else:
-		return numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_xTemp, train_yTemp, test_xTemp, test_yTemp
-
+		return numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y
+	
 def processDatasetLUANN(LUANNsequentialInputTypeIndex, inputVectors):
 
 	percentageDatasetTrain = ANNtf2_loadDataset.percentageDatasetTrain
@@ -346,7 +370,7 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 	fileIndexTemp = 0	#assert trainMultipleFiles = False
 	
 	#generate network parameters based on dataset properties:
-	numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamplesTemp, train_xTemp, train_yTemp, test_xTemp, test_yTemp = loadDataset(fileIndexTemp)
+	numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamplesTemp, train_xTemp, train_yTemp, test_xTemp, test_yTemp = loadDataset(fileIndexTemp, equaliseNumberExamplesPerClass=LUANNtf_algorithm.equaliseNumberExamplesPerClass, normalise=LUANNtf_algorithm.normaliseFirstLayer)
 
 	#Model constants
 	num_input_neurons = datasetNumFeatures  #train_x.shape[1]
@@ -373,7 +397,13 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 		maxLayer = 1
 														
 	#stochastic gradient descent optimizer
-	optimizer = tf.optimizers.SGD(learningRate)
+	if(trainMultipleNetworksSelect):
+		optimizerList = []
+		for networkIndex in range(1, maxNetwork+1):
+			optimizer = tf.optimizers.SGD(learningRate)
+			optimizerList.append(optimizer)
+	else:
+		optimizer = tf.optimizers.SGD(learningRate)
 	
 	for e in range(numEpochs):
 
@@ -391,7 +421,7 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 			
 			#print("f = ", f)
 	
-			numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y = loadDataset(fileIndex)
+			numberOfFeaturesPerWord, paddingTagIndex, datasetNumFeatures, datasetNumClasses, datasetNumExamples, train_x, train_y, test_x, test_y = loadDataset(fileIndex, equaliseNumberExamplesPerClass=LUANNtf_algorithm.equaliseNumberExamplesPerClass, normalise=LUANNtf_algorithm.normaliseFirstLayer)
 
 			shuffleSize = datasetNumExamples	#heuristic: 10*batchSize
 			trainDataIndex = 0
@@ -407,34 +437,67 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 				testBatchX, testBatchY = generateTFbatch(test_x, test_y, batchSize)
 
 				for batchIndex in range(int(trainingSteps)):
-					(batchX, batchY) = trainDataListIterators[trainDataIndex].get_next()	#next(trainDataListIterators[trainDataIndex])
-					batchYactual = batchY
+					#print("batchIndex = ", batchIndex)
 					
+					(batchX, batchY) = trainDataListIterators[trainDataIndex].get_next()	#next(trainDataListIterators[trainDataIndex])
+										
+					if(trainMultipleNetworksSelect):
+						maxAccuracy = 0.0
+						minLoss = 0.0
+
+					display = False
+					#if(l == maxLayer):	#only print accuracy after training final layer
+					if(batchIndex % displayStep == 0):
+						display = True
+																
 					for networkIndex in range(1, maxNetwork+1):
-						#print("networkIndex = ", networkIndex)
-						display = False
-						#if(l == maxLayer):	#only print accuracy after training final layer
-						if(batchIndex % displayStep == 0):
-							display = True	
-						trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, display)
 						
-					#trainMultipleNetworks code;
-					if(l == maxLayer):
+						if(LUANNtf_algorithm.debugPrintVerbose):
+							print("networkIndex = ", networkIndex)
+							print("batchY = ", batchY)
+
+						if(trainMultipleNetworksSelect):
+							optimizer = optimizerList[networkIndex-1]
+						
+						displayNetwork = display
 						if(trainMultipleNetworks):
+							displayNetwork = False
+							
+						loss, acc = trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, displayNetwork)
+						
+						if(trainMultipleNetworksSelect):
+							#print("acc = ", acc)
+							if(acc > maxAccuracy):
+								maxAccuracy = acc
+								minLoss = loss
+						
+						#WlayerF = LUANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, 1, "Wf")]
+						#print("WlayerF = ", WlayerF)
+												
+					#trainMultipleNetworks code;
+					if(trainMultipleNetworksMerge):
+						if(l == maxLayer):
 							#train combined network final layer
 							trainBatchAllNetworksFinalLayer(batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, costCrossEntropyWithLogits, display)
-
+				
+					if(trainMultipleNetworksSelect):
+						if(display):
+							print("All networks optimum train accuracy: batchIndex: %i, loss: %f, accuracy: %f" % (batchIndex, minLoss, maxAccuracy))
+							#WlayerF = LUANNtf_algorithm.Wf[generateParameterNameNetwork(networkIndex, 1, "Wf")]
+							#print("WlayerF = ", WlayerF)
+									
 				#trainMultipleNetworks code;
-				if(trainMultipleNetworks and (l == maxLayer)):
+				if(trainMultipleNetworksMerge and (l == maxLayer)):
 					testBatchAllNetworksFinalLayer(testBatchX, testBatchY, datasetNumClasses, numberOfLayers)
+				elif(trainMultipleNetworksSelect and (l == maxLayer)):
+					testBatchAllNetworksOptimum(testBatchX, testBatchY, datasetNumClasses, numberOfLayers, costCrossEntropyWithLogits)
 				else:
 					pred = neuralNetworkPropagationTest(testBatchX, networkIndex)
 					if(greedy):
 						print("Test Accuracy: l: %i, %f" % (l, calculateAccuracy(pred, testBatchY)))
 					else:
 						print("Test Accuracy: %f" % (calculateAccuracy(pred, testBatchY)))
-
-								
+			
 def generateRandomisedIndexArray(indexFirst, indexLast, arraySize=None):
 	fileIndexArray = np.arange(indexFirst, indexLast+1, 1)
 	#print("fileIndexArray = " + str(fileIndexArray))
