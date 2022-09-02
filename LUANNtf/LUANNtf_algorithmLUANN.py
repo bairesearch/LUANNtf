@@ -34,12 +34,39 @@ debugPrintVerbose = False	#print weights and activations
 debugSmallBatchSize = False	#small batch size for debugging matrix output
 debugSingleLayerOnly = False
 debugCompareMultipleNetworksPerformanceGain = False
+debugLowEpochs = False
 
 #select learningAlgorithm:
 learningAlgorithmNone = True	#create a very large network (eg x10) neurons per layer, and perform final layer backprop only
 #learningAlgorithmLIANN = False	#support disabled (see LIANNtf_algorithmLIANN)	#create a very large network (eg x10) neurons per layer, remove/reinitialise neurons that are highly correlated (redundant/not necessary to end performance), and perform final layer backprop only	
 
-#LUANN core parameters;
+#initialise network depth parameters;
+generateDeepNetwork = False	#default: True	#optional	#used for algorithm testing
+
+#initialise network size parameters;
+generateLargeNetwork = False	#initialise (dependent var)
+generateVeryLargeNetwork = False	#initialise (dependent var)
+if(learningAlgorithmNone):
+	#can pass different task datasets through a shared randomised net
+	if(not debugSmallNetwork):
+		#if(!supportMultipleNetworksSelect): large+ network is required
+		generateLargeNetwork = False	#optional	default: False
+		generateVeryLargeNetwork = False	#optional	default: True
+		
+#if(learningAlgorithmLIANN):
+#	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
+
+#initialise batch size parameters;
+largeBatchSize = False	#True: train each layer using ~entire training set
+
+#posthoc pruning customisation;
+pruneConnections = False	#initialise (dependent var)
+if(generateVeryLargeNetwork):
+	pruneConnections = False	#optional	#prune final layer connections with low absolute value weights
+	if(pruneConnections):
+		pruneConnectionWeightThreshold = 1.0	#requires calibration
+	
+#LUANN core parameters (final layer training);
 onlyTrainFinalLayer = True	#mandatory for LUANN
 if(debugTrainAllLayers):
 	onlyTrainFinalLayer = False
@@ -49,17 +76,15 @@ normaliseFirstLayer = False	#default: False
 if(onlyTrainFinalLayer):
 	normaliseFirstLayer = True	#optimisation	#normalise input data based on mean/std
 
-#intialise network properties;	
+#intialise multiple network properties;	
 supportMultipleNetworks = True	#optional
-
-supportMultipleNetworksSelect = False	#initialise (dependent var)
-supportMultipleNetworksMerge = False	#initialise (dependent var)
 if(debugCompareMultipleNetworksPerformanceGain):
 	supportMultipleNetworks = True
-if(supportMultipleNetworks):
-	supportMultipleNetworksSelect = True	#trial propagation performance of all networks, and select network that provides highest performance
-	supportMultipleNetworksMerge = False	#orig
+#if(supportMultipleNetworks):
+supportMultipleNetworksSelect = True	#trial propagation performance of all networks, and select network that provides highest performance
+supportMultipleNetworksMerge = False	#orig
 
+#intialise experimental properties;	
 supportMultipleNetworksStatic = False	#initialise (dependent var)
 initialiseRandomBiases = False	#initialise (dependent var)
 initialiseUniformWeights = False	#initialise (dependent var)
@@ -70,68 +95,53 @@ if(supportMultipleNetworksSelect):
 	initialiseUniformWeights = False	#trial
 	equaliseNumberExamplesPerClass = False	#trial
 
+#intialise sparsity properties;	
 if(supportMultipleNetworksSelect):
 	useSparsity = False
 else:
 	useSparsity = True
 if(useSparsity):
   sparsityProbabilityOfConnection = 0.1 #1-sparsity
+
+#intialise skip layer properties;	
 supportSkipLayers = False #fully connected skip layer network
 
-largeBatchSize = False	#True: train each layer using ~entire training set
-generateNetworkStatic = False	#optional
-generateDeepNetwork = False	#default: True	#optional	#used for algorithm testing
-if(generateDeepNetwork):
-	generateNetworkStatic = True	#True: autoencoder requires significant number of neurons to retain performance?
+#shared computational units properties;	
+generateNetworkStatic = False	#True: same number of neurons at each hidden layer (required for shareComputationalUnits)	#requires generateDeepNetwork
 shareComputationalUnits = False	
 shareComputationalUnitsLayersExponentialDivergence = False
-if(generateNetworkStatic):
-	if(learningAlgorithmNone):	#only currently supported by learningAlgorithmNone
-		shareComputationalUnits = False	#optional
-		if(debugCompareMultipleNetworksPerformanceGain):
-			shareComputationalUnits = False
-		if(shareComputationalUnits):
-			shareComputationalUnitsLayers = False
-			shareComputationalUnitsNeurons = False	
-			if(supportMultipleNetworks):
-				shareComputationalUnitsLayers = True
-				shareComputationalUnitsLayersExponentialDivergence = True	#simulate divergence of layers
-				if(shareComputationalUnitsLayersExponentialDivergence):
-					shareComputationalUnitsLayersDivergenceRate = 100	#muliplication of effective/unique networks per layer
-			else:
-				shareComputationalUnitsNeurons = True #prototype implementation for sharing computational units neurons in tensorflow (not required for smallDataset)	#shareComputationalUnitsNeurons are only possible because weights do not change	#reduces GPU RAM required to forward propagate large untrained net, but increases computational time (indexing of shared computational units)	#currently requires generateNetworkStatic (as each shared computational unit must have same number of inputs)
-				#note shareComputationalUnitsNeurons:supportSkipLayers is supported, but will have to have enough GPU RAM to support Atrace/Ztrace for every unitxbatchSize in network
-		
-#learning algorithm customisation;
-generateLargeNetwork = False	#initialise (dependent var)	#required #CHECKTHIS: autoencoder does not require bottleneck	#for default LUANN operations
-generateVeryLargeNetwork = False	#initialise (dependent var)
-if(learningAlgorithmNone):
-	#can pass different task datasets through a shared randomised net
-	if(debugSmallNetwork):
-		generateLargeNetwork = False
-		generateVeryLargeNetwork = False
-	else:
-		if(supportMultipleNetworksSelect):
-			generateLargeNetwork = False	#default: False
-			generateVeryLargeNetwork = False	#default: False
-		else:
-			generateLargeNetwork = True	#default: True
-			generateVeryLargeNetwork = True	#optional	#default: True
-	#supportDimensionalityReduction = False
-#elif(learningAlgorithmLIANN):
-#	if(not debugSmallNetwork):
-#		generateVeryLargeNetwork = True	#default: True
-#	supportDimensionalityReduction = True	#mandatory	#correlated neuron detection; dimensionality reduction via neuron atrophy or weight reset (see LIANN)
+if(generateDeepNetwork):
+	if(generateNetworkStatic):
+		if(learningAlgorithmNone):	#only currently supported by learningAlgorithmNone
+			shareComputationalUnits = True	#optional
+			if(debugCompareMultipleNetworksPerformanceGain):
+				shareComputationalUnits = False
+			if(shareComputationalUnits):
+				shareComputationalUnitsLayers = False	#initialise (dependent var)	#requires at least 2 hidden layers
+				shareComputationalUnitsNeurons = False	#initialise (dependent var)
+				if(supportMultipleNetworks):
+					shareComputationalUnitsLayers = True	#default: True
+					shareComputationalUnitsNeurons = False	#default: False
+					if(not supportMultipleNetworksStatic):
+						shareComputationalUnitsLayersExponentialDivergence = True	#simulate divergence of layers
+						if(shareComputationalUnitsLayersExponentialDivergence):
+							shareComputationalUnitsLayersDivergenceRate = 100	#muliplication of effective/unique networks per layer
+				else:
+					shareComputationalUnitsNeurons = True	#default: True #prototype implementation for sharing computational units neurons in tensorflow (not required for smallDataset)	#shareComputationalUnitsNeurons are only possible because weights do not change	#reduces GPU RAM required to forward propagate large untrained net, but increases computational time (indexing of shared computational units)	#currently requires generateNetworkStatic (as each shared computational unit must have same number of inputs)
+					#note shareComputationalUnitsNeurons:supportSkipLayers is supported, but will have to have enough GPU RAM to support Atrace/Ztrace for every unitxbatchSize in network
 
+#initialise network size parameters (detailed);
 if(not supportMultipleNetworksStatic):
 	if(useSparsity):
 		generateLargeNetworkRatioMax = 1000
 	else:
 		generateLargeNetworkRatioMax = 100	#maximum number of neurons per layer required to provide significant performance
-
 if(generateVeryLargeNetwork):
 	if(supportMultipleNetworksStatic):
-		generateLargeNetworkRatio = 10	#100	#1000
+		if(useSparsity):
+			generateLargeNetworkRatio = 100	#orig: 1000
+		else:
+			generateLargeNetworkRatio = 10
 	else:
 		if(supportMultipleNetworks):
 			if(shareComputationalUnits and shareComputationalUnitsLayersExponentialDivergence):
@@ -149,7 +159,7 @@ else:
 	else:
 		generateLargeNetworkRatio = 1
 
-#Network parameters (predefinitions for supportMultipleNetworks);
+#initialise network depth parameters (detailed);
 numberOfLayers = 0
 numberOfNetworks = 0
 if(debugSingleLayerOnly):
@@ -160,6 +170,7 @@ else:
 	else:
 		numberOfLayers = 2
 
+#intialise multiple network properties (detailed);	
 numberOfNetworks = 0
 if(supportMultipleNetworks):
 	if(supportMultipleNetworksStatic):
@@ -183,8 +194,7 @@ if(supportMultipleNetworks):
 #	if(supportDimensionalityReductionLimitFrequency):
 #		supportDimensionalityReductionLimitFrequencyStep = 1000	
 
-
-			
+		
 #network/activation parameters;
 #forward excitatory connections;
 Wf = {}
@@ -234,12 +244,15 @@ def defineTrainingParameters(dataset):
 	else:
 		if(largeBatchSize):
 			batchSize = 1000	#current implementation: batch size should contain all examples in training set
-			learningRate = 0.05
+			learningRate = 0.005	#0.05
 		else:
 			batchSize = 100	#3	#100
 			learningRate = 0.005
 	if(generateDeepNetwork):
-		numEpochs = 100	#higher num epochs required for convergence
+		if(debugLowEpochs):
+			numEpochs = 10
+		else:
+			numEpochs = 100	#higher num epochs required for convergence
 	else:
 		numEpochs = 10	#100 #10
 	if(debugFastTrain):
@@ -253,8 +266,6 @@ def defineTrainingParameters(dataset):
 			
 	return learningRate, trainingSteps, batchSize, displayStep, numEpochs
 	
-
-
 def defineNetworkParameters(num_input_neurons, num_output_neurons, datasetNumFeatures, dataset, numberOfNetworksSet):
 
 	global n_h
@@ -268,7 +279,6 @@ def defineNetworkParameters(num_input_neurons, num_output_neurons, datasetNumFea
 			
 	return numberOfLayers
 	
-
 def generateWeights(shape):
 	initialisedWeights = randomNormal(shape) 
 	if(useSparsity):
@@ -284,7 +294,6 @@ def generateBiases(shape):
 	else:
 		initialisedBiases = tf.zeros(shape)
 	return initialisedBiases
-
 
 def defineNeuralNetworkParameters():
 
@@ -307,16 +316,16 @@ def defineNeuralNetworkParameters():
 	if(shareComputationalUnits):
 		shareComputationalUnitsChecks = False
 		if(numberOfLayers >= 3):
-			#shareComputationalUnitsNeurons must have at least 2 hidden layers
+			#shareComputationalUnits must have at least 2 hidden layers
 			if(n_h[1] == n_h[2]):
 				shareComputationalUnitsChecks = True
 			else:
 				shareComputationalUnitsChecks = False
-				print("shareComputationalUnitsNeurons must have at least 2 static sized hidden layers")
+				print("shareComputationalUnits must have at least 2 static sized hidden layers")
 				exit()
 		else:
 			shareComputationalUnitsChecks = False
-			print("shareComputationalUnitsNeurons must have at least 2 hidden layers")
+			print("shareComputationalUnits must have at least 2 hidden layers")
 			exit()
 		if(shareComputationalUnitsChecks):
 			if(shareComputationalUnitsLayers):
@@ -592,4 +601,33 @@ def neuralNetworkPropagationLayerForward(l1, AprevLayer, networkIndex=1):
 def activationFunction(Z):
 	A = tf.nn.relu(Z)
 	return A
-	
+
+#pruneConnections:
+def pruneFinalLayerWeights():
+	if(supportMultipleNetworks):
+		maxNetwork = numberOfNetworks
+	else:
+		maxNetwork = 1
+	for networkIndex in range(1, maxNetwork+1):
+		l1 = numberOfLayers
+		if(supportSkipLayers):
+			for l2 in range(0, l1):
+				if(l2 < l1):
+					l1size = n_h[l1]
+					l2size = n_h[l2]
+					weights = Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")]
+					weights = pruneWeight(weights, pruneConnectionWeightThreshold)
+					Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = weights
+		else:
+			l2 = l1-1
+			l1size = n_h[l1]
+			l2size = n_h[l2]
+			weights = Wf[generateParameterNameNetwork(networkIndex, l1, "Wf")]
+			print("pre weights = ", weights)
+			weights = pruneWeight(weights, pruneConnectionWeightThreshold)
+			print("post weights = ", weights)
+			Wf[generateParameterNameNetworkSkipLayers(networkIndex, l2, l1, "Wf")] = weights
+				
+def pruneWeight(weights, threshold):
+	weights = tf.where(tf.logical_or(tf.math.greater(weights, threshold), tf.math.less(weights, -threshold)), weights, 0.0) 
+	return weights

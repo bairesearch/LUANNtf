@@ -343,7 +343,7 @@ def loadDataset(fileIndex, equaliseNumberExamplesPerClass=False, normalise=False
 		numberOfFeaturesPerWord = None
 		paddingTagIndex = None
 	elif(dataset == "wikiXmlDataset"):
-		articles = ANNtf2_loadDataset.loadDatasetType4(datasetType4FileName, LUANNsequentialInputTypesMaxLength, useSmallSentenceLengths, LUANNsequentialInputTypeTrainWordVectors)
+		articles = ANNtf2_loadDataset.loadDatasetType4(datasetType4FileName, sequentialInputTypesMaxLength, useSmallSentenceLengths, sequentialInputTypeTrainWordVectors)
 	
 	if(dataset == "wikiXmlDataset"):
 		return articles
@@ -364,7 +364,7 @@ def processDatasetLUANN(LUANNsequentialInputTypeIndex, inputVectors):
 		
 	return train_x, train_y, test_x, test_y
 	
-def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
+def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False, initialiseNetworkParameters=True):
 	
 	networkIndex = 1	#assert numberOfNetworks = 1
 	fileIndexTemp = 0	#assert trainMultipleFiles = False
@@ -378,7 +378,8 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 
 	learningRate, trainingSteps, batchSize, displayStep, numEpochs = defineTrainingParameters(dataset, numberOfFeaturesPerWord, paddingTagIndex)
 	numberOfLayers = defineNetworkParameters(num_input_neurons, num_output_neurons, datasetNumFeatures, dataset, numberOfNetworks, useSmallSentenceLengths, numberOfFeaturesPerWord)
-	defineNeuralNetworkParameters()
+	if(initialiseNetworkParameters):
+		defineNeuralNetworkParameters()
 
 	#configure optional parameters;
 	if(trainMultipleNetworks):
@@ -462,7 +463,7 @@ def train(trainMultipleNetworks=False, trainMultipleFiles=False, greedy=False):
 						displayNetwork = display
 						if(trainMultipleNetworks):
 							displayNetwork = False
-							
+						
 						loss, acc = trainBatch(e, batchIndex, batchX, batchY, datasetNumClasses, numberOfLayers, optimizer, networkIndex, costCrossEntropyWithLogits, displayNetwork)
 						
 						if(trainMultipleNetworksSelect):
@@ -512,4 +513,7 @@ def generateRandomisedIndexArray(indexFirst, indexLast, arraySize=None):
 	
 if __name__ == "__main__":
 	train(greedy=False, trainMultipleNetworks=trainMultipleNetworks)
+	if(LUANNtf_algorithm.pruneConnections):
+		LUANNtf_algorithm.pruneFinalLayerWeights()
+		train(greedy=False, trainMultipleNetworks=trainMultipleNetworks, initialiseNetworkParameters=False)
 
