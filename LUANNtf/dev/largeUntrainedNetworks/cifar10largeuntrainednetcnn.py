@@ -11,11 +11,14 @@ Original file is located at
 
 numberOfHiddenLayers = 2  #default = 5, if 0 then useSVM=True
 generateLargeNetworkUntrained = True
+useSparsity = True
+if(useSparsity):
+  sparsityProbabilityOfConnection = 0.1 #1-sparsity
 #addSkipLayers = False  #skip layers not supported by keras model.add definition format
 
 if(generateLargeNetworkUntrained):
   generateNetworkUntrained = True
-  largeNetworkRatio = 10
+  largeNetworkRatio = 1
   generateLargeNetworkExpansion = False
   if(generateLargeNetworkExpansion):
     generateLargeNetworkRatioExponential = True
@@ -23,6 +26,18 @@ else:
   generateNetworkUntrained = False
   generateLargeNetworkRatio = False
 
+def kernelInitializerWithSparsity(shape, dtype=None):
+  initialisedWeights = tf.random.normal(shape, dtype=dtype) #change to glorot_uniform?
+  sparsityMatrixMask = tf.random.uniform(shape, minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
+  sparsityMatrixMask = tf.math.less(sparsityMatrixMask, sparsityProbabilityOfConnection)
+  sparsityMatrixMask = tf.cast(sparsityMatrixMask, dtype=tf.dtypes.float32)
+  initialisedWeights = tf.multiply(initialisedWeights, sparsityMatrixMask)
+  return initialisedWeights
+if(useSparsity):
+  kernelInitializer = kernelInitializerWithSparsity
+else:
+  kernelInitializer = 'glorot_uniform'
+  
 def getLayerRatio(layerIndex):
   layerRatio = 1
   if(generateLargeNetworkUntrained):
@@ -78,30 +93,30 @@ model = Sequential()
 #model.add(Input(shape=input_shape))
 if(numberOfHiddenLayers >= 1):
   layerRatio = getLayerRatio(1)
-  model.add(Conv2D(32*layerRatio, (3, 3), padding='same'))
+  model.add(Conv2D(32*layerRatio, (3, 3), kernel_initializer=kernelInitializer, padding='same'))
   model.add(Activation('relu'))
 if(numberOfHiddenLayers >= 2):
   layerRatio = getLayerRatio(2)
-  model.add(Conv2D(32*layerRatio, (3, 3)))
+  model.add(Conv2D(32*layerRatio, (3, 3), kernel_initializer=kernelInitializer))
   model.add(Activation('relu'))
-  model.add(MaxPooling2D(pool_size=(2, 2)))
+  model.add(MaxPooling2D(pool_size=(2, 2), kernel_initializer=kernelInitializer))
   model.add(Dropout(0.25))
 
 if(numberOfHiddenLayers >= 3):
   layerRatio = getLayerRatio(3)
-  model.add(Conv2D(64*layerRatio, (3, 3), padding='same'))
+  model.add(Conv2D(64*layerRatio, (3, 3), kernel_initializer=kernelInitializer, padding='same'))
   model.add(Activation('relu'))
 if(numberOfHiddenLayers >= 4):
   layerRatio = getLayerRatio(4)
-  model.add(Conv2D(64*layerRatio, (3, 3)))
+  model.add(Conv2D(64*layerRatio, (3, 3), kernel_initializer=kernelInitializer))
   model.add(Activation('relu'))
-  model.add(MaxPooling2D(pool_size=(2, 2)))
+  model.add(MaxPooling2D(pool_size=(2, 2), kernel_initializer=kernelInitializer))
   model.add(Dropout(0.25))
 
 if(numberOfHiddenLayers >= 5):
   layerRatio = getLayerRatio(5)
   model.add(Flatten())
-  model.add(Dense(512*generateLargeNetworkRatio))
+  model.add(Dense(512*generateLargeNetworkRatio, kernel_initializer=kernelInitializer))
   model.add(Activation('relu'))
   model.add(Dropout(0.5))
 

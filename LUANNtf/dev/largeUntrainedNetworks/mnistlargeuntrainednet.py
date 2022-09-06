@@ -78,13 +78,30 @@ Build a `tf.keras.Sequential` model by stacking layers.
 """
 
 generateLargeNetworkUntrained = True
+useSparsity = True
+if(useSparsity):
+  sparsityProbabilityOfConnection = 0.1 #1-sparsity
+largeNetworkRatio = 100 #100
+
+def kernelInitializerWithSparsity(shape, dtype=None):
+  initialisedWeights = tf.random.normal(shape, dtype=dtype) #change to glorot_uniform?
+  sparsityMatrixMask = tf.random.uniform(shape, minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
+  sparsityMatrixMask = tf.math.less(sparsityMatrixMask, sparsityProbabilityOfConnection)
+  sparsityMatrixMask = tf.cast(sparsityMatrixMask, dtype=tf.dtypes.float32)
+  initialisedWeights = tf.multiply(initialisedWeights, sparsityMatrixMask)
+  return initialisedWeights
+if(useSparsity):
+  kernelInitializer = kernelInitializerWithSparsity
+else:
+  kernelInitializer = 'glorot_uniform'
+
 if(generateLargeNetworkUntrained):
   #only train the last layer
-  generateLargeNetworkRatio = 100
   model = tf.keras.models.Sequential([
     tf.keras.layers.Flatten(input_shape=(28, 28)),
-    tf.keras.layers.Dense(128*generateLargeNetworkRatio, activation='relu'),
-    tf.keras.layers.Dense(128*generateLargeNetworkRatio*4, activation='relu'),
+    tf.keras.layers.Dense(128*largeNetworkRatio, kernel_initializer=kernelInitializer, activation='relu'),
+    tf.keras.layers.Dense(128*largeNetworkRatio, kernel_initializer=kernelInitializer, activation='relu'),
+    tf.keras.layers.Dense(128*largeNetworkRatio, kernel_initializer=kernelInitializer, activation='relu'),  
     tf.keras.layers.Lambda(lambda x: tf.keras.backend.stop_gradient(x)),
     tf.keras.layers.Dense(10)
   ])
@@ -93,8 +110,8 @@ else:
   generateLargeNetworkRatio = 1
   model = tf.keras.models.Sequential([
     tf.keras.layers.Flatten(input_shape=(28, 28)),
-    tf.keras.layers.Dense(128*generateLargeNetworkRatio, activation='relu'),
-    #tf.keras.layers.Dense(128*generateLargeNetworkRatio, activation='relu'),
+    tf.keras.layers.Dense(128*largeNetworkRatio, kernel_initializer=kernelInitializer, activation='relu'),
+    #tf.keras.layers.Dense(128*largeNetworkRatio, kernel_initializer=kernelInitializer, activation='relu'),
     tf.keras.layers.Dense(10)
   ])
   #evaluation accuracy: 0.9764
@@ -127,6 +144,9 @@ loss_fn(y_train[:1], predictions).numpy()
 model.compile(optimizer='adam',
               loss=loss_fn,
               metrics=['accuracy'])
+
+
+print(model.summary())
 
 """## Train and evaluate your model
 

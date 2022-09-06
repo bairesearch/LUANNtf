@@ -137,19 +137,35 @@ As this model aims to categorize the images, we will use a ```categorical_crosse
 
 numberOfHiddenLayers = 2  #default = 5, if 0 then useSVM=True
 generateLargeNetworkUntrained = True
+useSparsity = True
+if(useSparsity):
+  sparsityProbabilityOfConnection = 0.1 #1-sparsity
 addSkipLayers = False
 if(numberOfHiddenLayers > 1):
   addSkipLayers = False #True  #optional
 
 if(generateLargeNetworkUntrained):
   generateNetworkUntrained = True
-  largeNetworkRatio = 10  #100
+  largeNetworkRatio = 10 #0.2 #1  #10  #100
   generateLargeNetworkExpansion = False
   if(generateLargeNetworkExpansion):
     generateLargeNetworkRatioExponential = False
 else:
   generateNetworkUntrained = False
   generateLargeNetworkRatio = False
+
+def kernelInitializerWithSparsity(shape, dtype=None):
+  initialisedWeights = tf.random.normal(shape, dtype=dtype) #change to glorot_uniform?
+  sparsityMatrixMask = tf.random.uniform(shape, minval=0.0, maxval=1.0, dtype=tf.dtypes.float32)
+  sparsityMatrixMask = tf.math.less(sparsityMatrixMask, sparsityProbabilityOfConnection)
+  sparsityMatrixMask = tf.cast(sparsityMatrixMask, dtype=tf.dtypes.float32)
+  initialisedWeights = tf.multiply(initialisedWeights, sparsityMatrixMask)
+  return initialisedWeights
+if(useSparsity):
+  kernelInitializer = kernelInitializerWithSparsity
+else:
+  kernelInitializer = 'glorot_uniform'
+    
 
 def getLayerRatio(layerIndex):
   layerRatio = 1
@@ -163,33 +179,33 @@ def getLayerRatio(layerIndex):
       layerRatio = largeNetworkRatio
   else:
     layerRatio = 1
-  return int(layerRatio)
+  return layerRatio #int(layerRatio)
 
 x = tf.keras.layers.Input(shape=input_shape)
 hLast = x
 if(numberOfHiddenLayers >= 1):
   layerRatio = getLayerRatio(1)
-  h1 = tf.keras.layers.Conv2D(32*layerRatio, (5,5), padding='same', activation='relu')(x)
+  h1 = tf.keras.layers.Conv2D(32*layerRatio, (5,5), kernel_initializer=kernelInitializer, padding='same', activation='relu')(x)
   hLast = h1
 if(numberOfHiddenLayers >= 2):
   layerRatio = getLayerRatio(2)
-  h2 = tf.keras.layers.Conv2D(32*layerRatio, (5,5), padding='same', activation='relu')(h1)
+  h2 = tf.keras.layers.Conv2D(32*layerRatio, (5,5), kernel_initializer=kernelInitializer, padding='same', activation='relu')(h1)
   h2 = tf.keras.layers.MaxPool2D()(h2)
   h2 = tf.keras.layers.Dropout(0.25)(h2)
   hLast = h2
 if(numberOfHiddenLayers >= 3):
   layerRatio = getLayerRatio(3)
-  h3 = tf.keras.layers.Conv2D(32*layerRatio, (3,3), padding='same', activation='relu')(h2)
+  h3 = tf.keras.layers.Conv2D(32*layerRatio, (3,3), kernel_initializer=kernelInitializer, padding='same', activation='relu')(h2)
   hLast = h3
 if(numberOfHiddenLayers >= 4):
   layerRatio = getLayerRatio(4)
-  h4 = tf.keras.layers.Conv2D(32*layerRatio, (3,3), padding='same', activation='relu')(h3)
+  h4 = tf.keras.layers.Conv2D(32*layerRatio, (3,3), kernel_initializer=kernelInitializer, padding='same', activation='relu')(h3)
   h4 = tf.keras.layers.MaxPool2D(strides=(2,2))(h4)
   h4 = tf.keras.layers.Flatten()(h4)
   hLast = h4
 if(numberOfHiddenLayers >= 5):
   layerRatio = getLayerRatio(5)
-  h5 = tf.keras.layers.Dense(128*layerRatio, activation='relu')(h4)
+  h5 = tf.keras.layers.Dense(128*layerRatio, kernel_initializer=kernelInitializer, activation='relu')(h4)
   h5 = tf.keras.layers.Dropout(0.5)(h5)
   hLast = h5
 if(addSkipLayers):
